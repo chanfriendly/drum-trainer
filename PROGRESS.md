@@ -10,9 +10,16 @@ whole backend is ported (MIDI, library, results, chart parsing, `song-audio://`
 protocol) and the preload IPC surface is complete. The renderer is still just a
 throwaway MIDI smoke-test screen — none of the five real screens exist yet.
 
-The big risk is retired: the packaged app enumerates MIDI devices from inside
-`app.asar.unpacked` without error. That was verified by launching the actual
-`.dmg` build, not by inspection.
+Two risks retired, both by measurement rather than inspection:
+- The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
+  without error, verified by launching the actual `.dmg`. `IAC Driver Bus 1`
+  now enumerates (the user enabled it 2026-07-16), so real device detection
+  works — receiving note-ons from it is still untested.
+- **The chart/audio alignment problem is found and solved in principle**
+  (estimator + storage + tests), though nothing calls it yet. Read the
+  CHANGELOG entry before touching timing — the spec's one-global-offset model
+  is wrong for real file pairs and would have made ~64% of the first test song
+  auto-Miss while looking like a judging bug.
 
 The reference implementation — the prior Glaze build — is at
 `~/Library/Application Support/app.glaze.macos.main/apps/drum-trainer-local-2qhmrebi/.glaze-sources`.
@@ -60,9 +67,16 @@ Prioritized. Top item is immediately actionable.
    `App.tsx`. Add the router (TanStack, **hash history** — `file://` has no
    server to resolve real paths) and the `nav:goto` subscription that the
    Settings menu item already sends. Goal: import → list → delete end-to-end.
-2. **Get a test song.** Blocks everything below — see "What's blocked".
+2. **Wire up alignment in the renderer.** The estimator and storage exist and
+   are tested; nothing calls them yet. Needs: fetch `song-audio://` → Web Audio
+   `decodeAudioData` → `OfflineAudioContext` resample to 22050 mono →
+   `onsetEnvelope` → `estimateAlignment` → `songs.setAlignment`. Then a Sync UI
+   showing confidence with a **±1 bar nudge** and an audible preview, because
+   auto-align cannot pick the right bar on its own (see CHANGELOG).
 3. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
-   judging against `audioEl.currentTime`.
+   judging against `audioEl.currentTime`. Must apply `song.alignment` when
+   building the playable chart, and should warn when `alignment.source ===
+   "none"` rather than judging a drifting chart silently.
 4. **Port Results, Settings, Calibration.**
 5. **Write the pure-function tests** — `chart.ts` (parsing, difficulty) is
    already split out to be testable without Electron; add accuracy/score math
@@ -77,25 +91,23 @@ Prioritized. Top item is immediately actionable.
 
 ## What's blocked
 
-- **Real MIDI enumeration and all judgment "feel" work** is blocked on input
-  hardware. The packaged app returns an *empty* device list because no e-kit is
-  connected — the addon is proven to load, but enumerating a real device is not
-  proven. **Cheap unblock (no kit required):** the IAC Driver is a virtual MIDI
-  cable inside macOS — Audio MIDI Setup → Window → Show MIDI Studio (⌘2) →
-  double-click IAC Driver → tick "Device is online". It creates the *port*;
-  something must still *send* into it, e.g. Logic Pro playing a drum track out
-  to "IAC Bus 1". That yields a device to enumerate and real note-ons to judge
-  with no hardware attached, which makes the gameplay port verifiable — worth
-  doing *before* that port. Not yet enabled: it changes how every audio app on
-  the machine sees MIDI, so it's the user's call. Judgment *feel* still needs
-  the real kit.
-- **Test song: MIDI in hand, AUDIO STILL MISSING.** Import needs a pair, and
-  there is no chart-from-audio path by design, so gameplay cannot be exercised
-  until the audio arrives. Asked the user for an mp3 on 2026-07-16.
-  - MIDI: `~/Downloads/Another-One-Bites-The-Dust-2.mid`. **Deliberately not
-    committed** — copyrighted, and this repo may go open source; a Queen MIDI in
-    the history would need a history rewrite to remove. Tests use a synthetic
-    fixture instead.
+- **Judgment "feel"** still needs the real e-kit and the user's ears; no test
+  can establish it. NOT blocked any more: device enumeration (IAC Driver Bus 1
+  is online as of 2026-07-16). Something must still *send* into the IAC bus for
+  note-ons — e.g. Logic Pro playing a drum track out to "IAC Bus 1".
+- **Test song: COMPLETE PAIR IN HAND** (as of 2026-07-16) — but see the
+  alignment caveat below.
+  - MIDI: `~/Downloads/Another-One-Bites-The-Dust-2.mid`
+  - Audio: `~/Downloads/Queen - Another One Bites the Dust (Official Video).mp3`
+    (2.9MB, 222.8s)
+  - **Neither is committed** — copyrighted, and this repo may go open source; a
+    Queen MIDI/mp3 in the history would need a history rewrite to remove. The
+    test fixtures under `tests/fixtures/` are gitignored and derived from these;
+    regenerate with the ffmpeg command in `tests/alignment.test.ts`.
+  - **This pair does NOT align** (MIDI 110.000bpm vs recording ~109.68bpm,
+    ~600ms drift). It is a *good* test case precisely because of that — it is
+    the case the alignment feature exists for — but do not treat "notes don't
+    line up" as a gameplay bug when using it.
   - Verified 2026-07-16 by running it through the real parse logic: 212.5s,
     drum track correctly picked (ch 9, percussion, 1380 notes) out of 5 tracks,
     6.50 nps → **Hard**, 94.6% mapped.

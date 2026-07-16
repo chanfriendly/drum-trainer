@@ -147,6 +147,8 @@ first paint flashes light.
 | `songs:list` | invoke | → `SongMeta[]` |
 | `songs:get` | invoke | `(id)` → `SongWithChart` |
 | `songs:delete` | invoke | `(id)` → `{ok}` |
+| `songs:setAlignment` | invoke | `({id, alignment})` → `SongMeta` |
+| `dialog:pickAudio` / `dialog:pickMidi` | invoke | → `string \| null` |
 | `results:list` | invoke | `(songId)` → `SongResult[]` |
 | `results:save` | invoke | `(input)` → `SongResult` |
 | `nav:goto` | broadcast | → path string (menu → route) |
@@ -175,6 +177,27 @@ as a miss would punish the player for the app's ignorance of their kit.
 
 - Accuracy = `(perfect·1 + good·0.6 + (early + late)·0.3) / totalNotes × 100`
 - Score = base (Perfect 100 / Good 60 / Early|Late 30) × `(1 + combo/25)`
+
+**There are TWO different time corrections. Never merge them.**
+
+- `settings.latencyOffsetMs` — GLOBAL, one value for the whole app, from
+  calibration. It models *hardware/IPC lag*: your kit, CoreMIDI, the audio
+  output path.
+- `song.alignment` (`{offsetMs, tempoScale}`) — PER SONG. It models *the file
+  pair*: where the chart sits in the recording and whether the MIDI's tempo
+  matches it. Needed because a MIDI transcription and a commercial recording
+  have no shared master. Measured on the first real pair: the MIDI is a rigid
+  110.000bpm grid, the recording is ~109.68bpm, and the chart drifts ~600ms
+  apart over the song — enough to make ~64% of it auto-Miss on a constant
+  offset alone.
+
+Merging them would make calibrating your kit corrupt every song's alignment.
+
+**Auto-alignment is a suggestion, not an answer.** `offsetMs` is ambiguous by
+whole bars — a groove looks the same shifted a bar, so the correlator cannot
+tell. `tempoScale` is reliable; the bar is not. Always let the player confirm
+by ear and nudge ±1 bar. High confidence means "locked onto the groove", not
+"found the right bar".
 
 **`@julusian/midi` must stay externalized** in `electron.vite.config.ts` and
 listed in electron-builder's `files`/`asarUnpack`. It resolves its prebuilt

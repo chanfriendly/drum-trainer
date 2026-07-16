@@ -54,6 +54,49 @@ export interface ChartNote {
   velocity: number;
 }
 
+/**
+ * Maps chart time onto audio time: `audioSeconds = chartSeconds * tempoScale +
+ * offsetMs/1000`.
+ *
+ * WHY THIS EXISTS. The spec assumes an audio + MIDI pair is inherently aligned.
+ * That is only true when both come from the same master. A MIDI transcription
+ * paired with a commercial recording is not: measured on the first real pair
+ * (Another One Bites the Dust), the MIDI is a rigid 110.000 bpm grid while the
+ * recording sits at ~109.68 bpm and is not perfectly steady. The chart walks
+ * ~3ms further out of sync per second — ~600ms by the end of the song.
+ *
+ * With only the global latency offset (which is for HARDWARE lag, and is a
+ * single constant for the whole app), ~64% of that song auto-Misses no matter
+ * how well the player drums. Worse, it presents as "the judging is broken",
+ * which sends you debugging the wrong code.
+ *
+ * So alignment is PER SONG and has two terms, not one. `latencyOffsetMs` in
+ * settings stays what it always was: hardware/IPC lag, global, from calibration.
+ * These two are a property of the file pair. Don't merge them.
+ */
+export interface SongAlignment {
+  /** Constant shift, ms. Positive = the chart happens LATER in the audio. */
+  offsetMs: number;
+  /** Tempo ratio. 1 = MIDI tempo matches the recording. */
+  tempoScale: number;
+  /** How this was arrived at — `none` means untried, so gameplay should warn. */
+  source: "none" | "auto" | "manual";
+  /**
+   * Mean onset-envelope score at the chosen alignment, in standard deviations
+   * above the envelope mean. Near 0 means the chart landed on random audio (a
+   * failed estimate); >1 is a confident lock. Surface this rather than silently
+   * trusting a bad auto-estimate.
+   */
+  confidence: number;
+}
+
+export const NO_ALIGNMENT: SongAlignment = {
+  offsetMs: 0,
+  tempoScale: 1,
+  source: "none",
+  confidence: 0,
+};
+
 export interface SongMeta {
   id: string;
   name: string;
@@ -65,6 +108,8 @@ export interface SongMeta {
   /** File name only; the bytes are served over `song-audio://`. */
   audioFile: string;
   createdAt: number;
+  /** How the chart lines up with the audio. See SongAlignment. */
+  alignment: SongAlignment;
 }
 
 export interface SongWithChart extends SongMeta {

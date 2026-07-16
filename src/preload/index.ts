@@ -17,6 +17,7 @@ import type {
   MidiDevice,
   MidiNoteEvent,
   ResultInput,
+  SongAlignment,
   SongMeta,
   SongResult,
   SongWithChart,
@@ -49,6 +50,9 @@ const api = {
     list: (): Promise<SongMeta[]> => ipcRenderer.invoke("songs:list"),
     get: (id: string): Promise<SongWithChart> => ipcRenderer.invoke("songs:get", id),
     delete: (id: string): Promise<{ ok: true }> => ipcRenderer.invoke("songs:delete", id),
+    /** Persist a chart↔audio alignment. See SongAlignment for why this exists. */
+    setAlignment: (id: string, alignment: SongAlignment): Promise<SongMeta> =>
+      ipcRenderer.invoke("songs:setAlignment", { id, alignment }),
     /** Native open dialogs — the renderer cannot reach the filesystem itself. */
     pickAudio: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickAudio"),
     pickMidi: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickMidi"),

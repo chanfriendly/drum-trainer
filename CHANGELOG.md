@@ -5,6 +5,75 @@ Most recent first.
 
 ---
 
+### 2026-07-16: Per-song chart↔audio alignment (spec change)
+
+**The spec was wrong, and real data proved it.** BUILD-PROMPT models a song as
+"an audio file + MIDI file pair" with a single global latency offset for
+hardware lag. That assumes the two files share a time base. They don't, unless
+both come from the same master — and a MIDI transcription paired with a
+commercial recording never does.
+
+**Measured on the first real pair** (Another One Bites the Dust, user-supplied
+mp3 + MIDI):
+
+- The MIDI is a rigid **110.000 bpm** grid, single tempo event, no changes.
+- The recording runs at **~109.68 bpm** and is not perfectly steady.
+- The chart therefore walks ~3ms further out of sync per second — **~600ms**
+  across the song.
+- With a constant offset tuned to the intro, **7 of 11 twenty-second windows
+  fall outside the ±100ms edge window: ~64% of the song auto-Misses**, no matter
+  how well the player drums.
+
+The failure mode is what makes this worth a spec change: it doesn't look like a
+bad file, it looks like *broken judging*. It would have sent a future session
+debugging the scoring code, which would have been correct all along.
+
+**Change.** `SongMeta` gains `alignment: {offsetMs, tempoScale, source,
+confidence}`, persisted per song, applied as
+`audioTime = chartTime * tempoScale + offsetMs/1000`. New IPC:
+`songs:setAlignment`. `settings.latencyOffsetMs` is untouched and keeps its
+original meaning — hardware/IPC lag, global. **The two are deliberately
+separate**: merging them would make calibrating the kit corrupt every song.
+
+**The estimator lives in the renderer** (`renderer/lib/alignment.ts`), because
+Web Audio's `decodeAudioData` decodes mp3/m4a/flac with no native dependency.
+Doing it in main would mean shipping an audio decoder or depending on ffmpeg,
+which cannot be assumed present in a packaged app. Import therefore writes
+`source: "none"` and the renderer fills alignment in later.
+
+**Two findings from building it, both counter-intuitive:**
+
+1. *A ~35ms systematic bias, found by a synthetic test.* An FFT frame starting
+   at sample `f*HOP` is centered half a window later, and flux compares frame
+   i+1 to i, so the envelope's time base LEADS true onsets by exactly
+   `1 + N_FFT/(2*HOP)` = 3 frames. Measured: -3.13 frames for a click at t=1.0s.
+   Uncorrected this biases every estimated offset by more than the ±25ms Perfect
+   window. Fixed via `FRAME_LEAD`; pinned by a regression test.
+
+2. *`offsetMs` is fundamentally ambiguous by whole bars.* A groove looks
+   identical shifted one bar, so the correlator cannot distinguish them. An
+   independent numpy implementation found offset +3.383s/scale 0.99711 while the
+   TypeScript found +8.704s/scale 0.99780 — different optima, both confident.
+   **`tempoScale` is well-determined** (drift is punished across the whole song);
+   the bar is not. So auto-align must be a *suggestion* the player confirms by
+   ear, with a ±1 bar nudge — never a silent auto-apply. Attempting to
+   disambiguate with musical landmarks (a silent break, a dense fill) does NOT
+   work with the current metric: `score()` is the mean envelope strength at note
+   positions, and a beat-shifted chart still lands most notes on real hits, so a
+   few landmark notes barely move the average. Changing the metric to penalise
+   *unmatched audio onsets* is the upgrade path.
+
+**Tests.** 16 passing in `tests/alignment.test.ts`, including two against the
+real song (skipped unless the local fixture exists — the song is copyrighted and
+not committed). The real-song tests assert only what two independent
+implementations agree on: tempo mismatch and confidence, never the exact offset.
+
+**Still open:** nothing applies the alignment yet — gameplay doesn't exist. The
+estimate is also not yet run anywhere; the renderer needs to call it and offer
+the confirm/nudge UI.
+
+---
+
 ### 2026-07-16: Scaffold — Electron skeleton, MIDI service, storage services
 
 **Built.** `electron-vite` + `electron-builder` scaffold; main-process

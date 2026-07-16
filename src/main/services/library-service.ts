@@ -15,7 +15,13 @@ import * as path from "node:path";
 
 import { app } from "electron";
 
-import type { ImportSongInput, SongMeta, SongWithChart } from "../../shared/types.js";
+import type {
+  ImportSongInput,
+  SongAlignment,
+  SongMeta,
+  SongWithChart,
+} from "../../shared/types.js";
+import { NO_ALIGNMENT } from "../../shared/types.js";
 import { logger } from "../logger.js";
 import { difficultyFor, notesPerSecond, parseChart } from "./chart.js";
 
@@ -89,6 +95,11 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
       difficulty: difficultyFor(notesPerSecond(chart.length, duration)),
       audioFile,
       createdAt: Date.now(),
+      // Import cannot estimate alignment: the audio decoder lives in the
+      // renderer (Web Audio). The renderer runs the estimate and calls
+      // songs:setAlignment. Until then `source: "none"` marks it unaligned, and
+      // gameplay should say so rather than silently judging a drifting chart.
+      alignment: NO_ALIGNMENT,
     };
 
     const full: SongWithChart = { ...meta, chart };
@@ -113,10 +124,45 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
 async function readSong(id: string): Promise<SongWithChart | null> {
   try {
     const raw = await fs.readFile(path.join(getSongDir(id), "song.json"), "utf-8");
-    return JSON.parse(raw) as SongWithChart;
+    const song = JSON.parse(raw) as SongWithChart;
+    // Songs written before alignment existed have no `alignment` key. Default it
+    // rather than letting `undefined` reach the renderer's judging math.
+    return { ...song, alignment: song.alignment ?? NO_ALIGNMENT };
   } catch {
     return null;
   }
+}
+
+/**
+ * Persist an alignment. Separate from import because only the renderer can
+ * decode audio, so the estimate necessarily arrives later.
+ */
+export async function setAlignment(id: string, alignment: SongAlignment): Promise<SongMeta> {
+  const song = await readSong(id);
+  if (!song) throw new Error(`Song not found: ${id}`);
+
+  if (!Number.isFinite(alignment.offsetMs) || !Number.isFinite(alignment.tempoScale)) {
+    throw new Error("Alignment offsetMs and tempoScale must be finite numbers.");
+  }
+  // A tempoScale far from 1 means the estimate is nonsense, not that the song is
+  // exotic; applying it would scatter the chart across the song.
+  if (alignment.tempoScale < 0.5 || alignment.tempoScale > 2) {
+    throw new Error(`Implausible tempoScale: ${alignment.tempoScale}`);
+  }
+
+  const updated: SongWithChart = { ...song, alignment };
+  await fs.writeFile(path.join(getSongDir(id), "song.json"), JSON.stringify(updated), "utf-8");
+
+  logger.info("library", "Saved alignment", {
+    id,
+    offsetMs: Math.round(alignment.offsetMs),
+    tempoScale: alignment.tempoScale,
+    source: alignment.source,
+    confidence: alignment.confidence,
+  });
+
+  const { chart: _chart, ...meta } = updated;
+  return meta;
 }
 
 /** List all songs (metadata only — the chart can be thousands of notes). */

@@ -90,6 +90,21 @@ export function registerHandlers(): void {
     return { ok: true as const };
   });
 
+  ipcMain.handle("songs:setAlignment", (_event, arg: unknown) => {
+    const obj = asRecord(arg);
+    const alignment = asRecord(obj.alignment);
+    const source = alignment.source;
+    if (source !== "none" && source !== "auto" && source !== "manual") {
+      throw new Error(`Invalid alignment source: ${String(source)}`);
+    }
+    return library.setAlignment(asString(obj.id, "id"), {
+      offsetMs: asNumber(alignment.offsetMs, "offsetMs"),
+      tempoScale: asNumber(alignment.tempoScale, "tempoScale"),
+      source,
+      confidence: asNumber(alignment.confidence, "confidence"),
+    });
+  });
+
   // ── Results history ─────────────────────────────────────────────────
   ipcMain.handle("results:list", (_event, arg: unknown) =>
     results.listResults(asString(arg, "songId")),
