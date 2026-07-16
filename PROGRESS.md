@@ -80,14 +80,31 @@ Prioritized. Top item is immediately actionable.
 - **Real MIDI enumeration and all judgment "feel" work** is blocked on input
   hardware. The packaged app returns an *empty* device list because no e-kit is
   connected — the addon is proven to load, but enumerating a real device is not
-  proven. **Cheap unblock:** enable the IAC Driver in Audio MIDI Setup to create
-  a virtual MIDI port, then drive it from Logic Pro (already installed). That
-  provides a device to enumerate and note-ons to judge with no kit attached, and
-  makes the gameplay port verifiable — worth doing *before* that port. Judgment
-  *feel* still needs the real kit.
-- **A test song (audio + MIDI drum-track pair)** is needed before the import →
-  gameplay → results loop can be exercised at all. None is in the repo. Ask the
-  user, or source a freely-licensed MIDI drum track and matching audio.
+  proven. **Cheap unblock (no kit required):** the IAC Driver is a virtual MIDI
+  cable inside macOS — Audio MIDI Setup → Window → Show MIDI Studio (⌘2) →
+  double-click IAC Driver → tick "Device is online". It creates the *port*;
+  something must still *send* into it, e.g. Logic Pro playing a drum track out
+  to "IAC Bus 1". That yields a device to enumerate and real note-ons to judge
+  with no hardware attached, which makes the gameplay port verifiable — worth
+  doing *before* that port. Not yet enabled: it changes how every audio app on
+  the machine sees MIDI, so it's the user's call. Judgment *feel* still needs
+  the real kit.
+- **Test song: MIDI in hand, AUDIO STILL MISSING.** Import needs a pair, and
+  there is no chart-from-audio path by design, so gameplay cannot be exercised
+  until the audio arrives. Asked the user for an mp3 on 2026-07-16.
+  - MIDI: `~/Downloads/Another-One-Bites-The-Dust-2.mid`. **Deliberately not
+    committed** — copyrighted, and this repo may go open source; a Queen MIDI in
+    the history would need a history rewrite to remove. Tests use a synthetic
+    fixture instead.
+  - Verified 2026-07-16 by running it through the real parse logic: 212.5s,
+    drum track correctly picked (ch 9, percussion, 1380 notes) out of 5 tracks,
+    6.50 nps → **Hard**, 94.6% mapped.
+  - Note **39 (Hand Clap) × 75 is unmapped** by the default GM mapping →
+    correctly ignored, not missed. Good "Learn"-flow test case once Settings
+    exists.
+  - The chart only uses kick / snare / closed hi-hat — **it exercises 3 of the 6
+    lanes**. It will not shake out tom/crash/ride bugs. Get a second song with
+    cymbals and toms before trusting the gameplay canvas.
 - **Notarization** is deliberately out of scope; revisit only if the app is
   ever distributed to another person.
 
