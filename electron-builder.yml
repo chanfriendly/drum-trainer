@@ -1,0 +1,47 @@
+appId: com.chanfriendly.drumtrainer
+productName: Drum Trainer
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**
+  - package.json
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.{js,ts,mjs,cjs}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!{.eslintrc,.eslintrc.cjs,eslint.config.js}"
+  - "!{CLAUDE.md,PROGRESS.md,CHANGELOG.md,docs}"
+
+# @julusian/midi resolves its prebuilt .node binary at runtime relative to its own
+# package directory. Inside an asar archive that path is not a real file, so the
+# lookup fails — in the packaged app only. Unpacking it puts the binary on a real
+# filesystem path (app.asar.unpacked/) while keeping everything else archived.
+asarUnpack:
+  - node_modules/@julusian/midi/**
+
+mac:
+  category: public.app-category.music
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # Unsigned build — personal use, no Apple Developer account. First launch needs
+  # `xattr -d com.apple.quarantine "/Applications/Drum Trainer.app"` or
+  # right-click → Open. See CLAUDE.md → Quick reference.
+  identity: null
+  # The app reads no user media, but CoreMIDI access on recent macOS is smoother
+  # when the entitlement story is explicit rather than inherited.
+  extendInfo:
+    LSMinimumSystemVersion: "11.0"
+
+dmg:
+  title: ${productName}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

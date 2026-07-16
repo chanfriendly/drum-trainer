@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Drum Trainer</title>
+    <!--
+      Dark is forced here too, not just in the main process: the `dark` class is
+      on <html> from first byte so there is no light flash before React mounts.
+      There is intentionally no theme toggle — see CLAUDE.md → Conventions.
+
+      CSP: no remote origins. `song-audio:` is the media source; the app loads
+      nothing from the network.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' song-audio:; img-src 'self' data:;"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

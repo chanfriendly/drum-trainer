@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/*
+ * Always-dark. `@custom-variant dark` is pointed at the `.dark` class (set on
+ * <html> in index.html) rather than the OS media query, because the app forces
+ * dark regardless of system appearance.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Opaque app background. NOT vibrancy — translucent vibrancy washes out to
+     gray in light mode. See PROGRESS.md → Failed approaches. */
+  --color-surface: #0a0a0f;
+  --color-surface-raised: #14141c;
+  --color-surface-hover: #1c1c26;
+  --color-border-subtle: #26262f;
+  --color-text-primary: #f2f2f7;
+  --color-text-muted: #8b8b9a;
+
+  /* Lane colors — the neon gaming palette, carried over from the Glaze build. */
+  --color-drum-kick: #a855f7;
+  --color-drum-snare: #ef4444;
+  --color-drum-hihat: #eab308;
+  --color-drum-tom: #22c55e;
+  --color-drum-crash: #f97316;
+  --color-drum-ride: #06b6d4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* This is a desktop app, not a web page: no rubber-band scroll, no text
+     selection on chrome, no default drag-and-drop navigation. */
+  overscroll-behavior: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* The window uses titleBarStyle: "hiddenInset", so the top strip must be
+   draggable or the window cannot be moved. Interactive elements inside it need
+   `app-region: no-drag` or they stop receiving clicks. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}

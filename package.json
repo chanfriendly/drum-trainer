@@ -1,0 +1,44 @@
+{
+  "name": "drum-trainer",
+  "version": "1.0.0",
+  "productName": "Drum Trainer",
+  "description": "Rock Band-style rhythm trainer for electronic drum kits",
+  "author": "Christian Glass",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run type-check && electron-vite build",
+    "preview": "electron-vite preview",
+    "type-check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist:mac": "npm run build && electron-builder --mac --config electron-builder.yml"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.6.1"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.87.4",
+    "@tanstack/react-router": "^1.131.36",
+    "@tonejs/midi": "^2.0.28",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "clsx": "^2.1.1",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^5.0.0",
+    "lucide-react": "^0.542.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.7.2",
+    "vite": "^7.1.0",
+    "vitest": "^3.0.0"
+  }
+}
