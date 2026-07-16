@@ -12,6 +12,7 @@
     "build": "npm run type-check && electron-vite build",
     "preview": "electron-vite preview",
     "type-check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test:fixtures": "bash scripts/prepare-test-fixtures.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.yml"

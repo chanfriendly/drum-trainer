@@ -19,9 +19,15 @@ npm install              # first run only
 npm run dev              # electron-vite dev — hot reload for renderer, restart for main
 npm run type-check       # tsc --noEmit across main, preload, renderer
 npm run test             # vitest (pure functions only — see Principles)
+npm run test:fixtures    # decode test audio to PCM (needs ffmpeg; test-only)
 npm run build            # type-check + compile main/preload/renderer to out/
 npm run dist:mac         # build + package an unsigned .dmg into release/
 ```
+
+`assets/practice-groove/` is the test song: audio rendered from its own chart,
+so its true alignment is known (offset 0, scale 1). It is the project's ORACLE —
+use it whenever you need to tell "the code is wrong" apart from "that file pair
+doesn't line up". Read its README before changing it.
 
 There is no lint script yet — ESLint is not set up. Don't advertise commands
 that don't run; add it and this line changes.

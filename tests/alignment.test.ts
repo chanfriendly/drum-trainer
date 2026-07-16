@@ -252,13 +252,66 @@ describe("estimateAlignment", () => {
   });
 });
 
+/** Read a raw f32le PCM fixture as Float32Array. */
+function readRaw(path: string): Float32Array {
+  const buf = readFileSync(path);
+  return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+}
+
+const dir = (f: string) => new URL(`./fixtures/${f}`, import.meta.url).pathname;
+
 /**
- * Real-song cross-check — skipped unless the fixture exists. The song is
- * copyrighted and deliberately not committed (see PROGRESS.md). Generate with:
- *   ffmpeg -i "<song>.mp3" -ac 1 -ar 22050 -f f32le tests/fixtures/song.raw
+ * ── THE ORACLE ───────────────────────────────────────────────────────
+ * Practice Groove: audio rendered FROM the chart it is tested against
+ * (scripts/generate-test-song.mjs + render-test-song.py), so the true alignment
+ * is known exactly — offset 0, tempoScale 1, sample-accurate.
+ *
+ * This is the only test in the project that checks the estimator against a
+ * KNOWN answer on real audio; everything else can only check self-consistency
+ * or agreement between implementations. It caught its own worth immediately:
+ * without the FRAME_LEAD correction this reads ~-35ms instead of ~-6ms.
+ *
+ * Assets are committed (original content, FLAC to avoid mp3 encoder delay).
+ * The decoded PCM is regenerable, so it is gitignored: `npm run test:fixtures`.
  */
-const RAW = new URL("./fixtures/song.raw", import.meta.url).pathname;
-const NOTES = new URL("./fixtures/notes.json", import.meta.url).pathname;
+const GROOVE_RAW = dir("practice-groove.raw");
+const GROOVE_NOTES = new URL("../assets/practice-groove/notes.json", import.meta.url).pathname;
+
+describe.skipIf(!existsSync(GROOVE_RAW))("estimateAlignment (Practice Groove — known truth)", () => {
+  const chart = () =>
+    (JSON.parse(readFileSync(GROOVE_NOTES, "utf-8")) as { time: number; midi: number }[]).map(
+      (n) => ({ time: n.time, midiNote: n.midi }),
+    );
+
+  it("recovers the true alignment to within a Perfect window", () => {
+    const est = estimateAlignment(onsetEnvelope(readRaw(GROOVE_RAW)), chart());
+
+    // Truth: offset 0, scale 1. Measured: -6.3ms, 1.00000, confidence 4.78.
+    // The ±25ms bound is the Perfect window: a larger error would mean the
+    // estimator cannot deliver a Perfect-able chart even on a flawless pair.
+    expect(Math.abs(est.offsetMs)).toBeLessThan(25);
+    expect(est.tempoScale).toBeCloseTo(1, 4);
+    expect(est.confidence).toBeGreaterThan(3);
+  });
+
+  it("leaves no drift across the song", () => {
+    const est = estimateAlignment(onsetEnvelope(readRaw(GROOVE_RAW)), chart());
+    const c = chart();
+    const last = c[c.length - 1].time;
+
+    // Both ends must land, not just the start.
+    expect(Math.abs(chartTimeToAudioTime(0, est))).toBeLessThan(0.025);
+    expect(Math.abs(chartTimeToAudioTime(last, est) - last)).toBeLessThan(0.025);
+  });
+});
+
+/**
+ * Real-song cross-check — the copyrighted Queen pair, skipped unless the
+ * fixture exists (see PROGRESS.md → Test song). Generate with:
+ *   npm run test:fixtures
+ */
+const RAW = dir("song.raw");
+const NOTES = dir("notes.json");
 
 describe.skipIf(!(existsSync(RAW) && existsSync(NOTES)))("estimateAlignment (real song)", () => {
   /**

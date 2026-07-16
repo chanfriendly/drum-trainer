@@ -5,6 +5,51 @@ Most recent first.
 
 ---
 
+### 2026-07-16: Practice Groove — a test song with known ground truth
+
+**Problem.** Every real audio+MIDI pair has unknown alignment, so a failure is
+ambiguous: is the code wrong, or do the files simply not line up? With only the
+Queen pair (which is known NOT to align) there was no way to answer that. Asked
+to find a good example song, the right move was to generate one rather than hunt
+for a licensed pair — matched pairs of commercial music barely exist, since the
+audio is a recording and the MIDI is someone's transcription.
+
+**What.** `assets/practice-groove/` — a 316-note, 61.2s, 100bpm chart, plus
+audio **rendered from that same note list**, sample-accurate. True alignment is
+therefore known: offset 0, tempoScale 1. This is the project's oracle. Original
+content, so it is committed, unlike the Queen pair.
+
+**It paid for itself immediately.** Estimator vs. known truth: **-6.3ms error,
+scale 1.00000, confidence 4.78** (the Queen pair scores 2.06). The 6.3ms
+residual is sub-frame quantization — a frame is 11.6ms. Without the `FRAME_LEAD`
+correction the same test reads ~-35ms; no self-consistent test could have caught
+that, because the bias applies equally to every candidate alignment.
+
+**Deliberate properties, each earned:**
+
+- *All six lanes* (kick 60, snare 50, hat 128, ride 56, tom 17, crash 5). The
+  Queen chart only uses kick/snare/hat and could never surface a tom/crash/ride
+  bug. Round-trips through the real parser at 100% mapped, difficulty Hard.
+- *Structure, not a loop* — section changes, a 16th tom fill, a near-silent
+  break. A uniform loop is inherently ambiguous to align (see the bar-ambiguity
+  finding); this gives the estimator something unique to lock onto.
+- *FLAC, not mp3.* mp3/AAC carry ~13-26ms of encoder delay — the same order as
+  the ±25ms Perfect window, and precisely the class of silent systematic bias
+  that FRAME_LEAD already cost real time. Lossless keeps the ground truth true.
+  1.9MB, small enough to commit.
+- *Deterministic* — the synth is seeded, so regeneration is byte-identical.
+- *No soundfont/fluidsynth* (neither installed): the kit is synthesised from
+  sine sweeps and filtered noise in numpy. Sharp transients are what onset
+  detection and a drummer's ear need; fidelity is beside the point.
+
+**Test-only ffmpeg.** Decoded PCM is regenerable, so it's gitignored;
+`npm run test:fixtures` rebuilds it. The app needs nothing installed — it
+decodes with Web Audio.
+
+18 alignment tests pass, now including two against known truth.
+
+---
+
 ### 2026-07-16: Per-song chart↔audio alignment (spec change)
 
 **The spec was wrong, and real data proved it.** BUILD-PROMPT models a song as
