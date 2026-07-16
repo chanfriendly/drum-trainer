@@ -95,8 +95,13 @@ Prioritized. Top item is immediately actionable.
   can establish it. NOT blocked any more: device enumeration (IAC Driver Bus 1
   is online as of 2026-07-16). Something must still *send* into the IAC bus for
   note-ons — e.g. Logic Pro playing a drum track out to "IAC Bus 1".
-- **Test song: COMPLETE PAIR IN HAND** (as of 2026-07-16) — but see the
-  alignment caveat below.
+- **Notarization** is deliberately out of scope; revisit only if the app is
+  ever distributed to another person.
+
+## Test song
+
+Pair in hand as of 2026-07-16 — not a blocker, but read this before using it.
+
   - MIDI: `~/Downloads/Another-One-Bites-The-Dust-2.mid`
   - Audio: `~/Downloads/Queen - Another One Bites the Dust (Official Video).mp3`
     (2.9MB, 222.8s)
@@ -117,8 +122,6 @@ Prioritized. Top item is immediately actionable.
   - The chart only uses kick / snare / closed hi-hat — **it exercises 3 of the 6
     lanes**. It will not shake out tom/crash/ride bugs. Get a second song with
     cymbals and toms before trusting the gameplay canvas.
-- **Notarization** is deliberately out of scope; revisit only if the app is
-  ever distributed to another person.
 
 ## Failed approaches
 
