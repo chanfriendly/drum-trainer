@@ -5,10 +5,15 @@
 
 ## Current status
 
-**The app builds, packages to a `.dmg`, launches, and talks to CoreMIDI.** The
-whole backend is ported (MIDI, library, results, chart parsing, `song-audio://`
-protocol) and the preload IPC surface is complete. The renderer is still just a
-throwaway MIDI smoke-test screen — none of the five real screens exist yet.
+**The Library screen works end-to-end in the real app: import → list → delete.**
+The whole backend is ported (MIDI, library, results, chart parsing,
+`song-audio://` protocol), the preload IPC surface is complete, and the app
+packages to a launchable `.dmg`.
+
+Of the five screens, Library is real. Gameplay, Results, Settings, and
+Calibration are placeholders that state what's missing
+(`renderer/views/placeholders.tsx`) — a half-built app should never be
+mistakable for a broken one.
 
 Two risks retired, both by measurement rather than inspection:
 - The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
@@ -27,8 +32,12 @@ Read it, don't copy it blindly: every `@glaze/core` import needs a real Electron
 replacement, and two of its comments were already found to be wrong (see
 "Failed approaches").
 
-Next work is the Library screen — the first real UI, and the thing that makes
-import → list testable.
+Next work is wiring the alignment estimator into the renderer (it exists and is
+tested, but nothing calls it), then the gameplay canvas.
+
+**Untested surface worth knowing:** the `song-audio://` protocol has never
+served a byte to a real <audio> element. Its Range handling is hand-rolled and
+seeking depends on it. Gameplay is where that gets exercised.
 
 ## What's done
 
@@ -57,36 +66,43 @@ import → list testable.
 - [x] 2026-07-16 — Verified in the packaged app: dark theme from first paint (no
       light flash), window renders, clean quit with `before-quit` MIDI cleanup
       firing. Closes three of the Glaze build's unverified items.
+- [x] 2026-07-16 — Built `assets/practice-groove/`, the ORACLE test song (audio
+      rendered from its own chart; true alignment known). Estimator recovers it
+      to -6.3ms / scale 1.00000 / confidence 4.78.
+- [x] 2026-07-16 — Alignment estimator + per-song storage + 18 tests. NOT yet
+      called by any UI.
+- [x] 2026-07-16 — **Library screen done and verified in the running app**:
+      local Tailwind UI primitives (`components/ui.tsx`), TanStack router with
+      memory history, root layout with the `nav:goto` bridge. Drove the real app:
+      empty state → Import (native pickers, correct extension filters) → toast →
+      song row (name/difficulty/duration/notes/best, plus a "Not synced" badge)
+      → delete confirm + cancel → Settings nav → ⌘, menu bridge. Confirmed
+      `songs/<id>/` on disk holds audio.flac + song.json with all 316 notes.
 
 ## What's next
 
 Prioritized. Top item is immediately actionable.
 
-1. **Port the Library screen** — `renderer/views/library-view.tsx` plus the
-   first real components in `renderer/components/ui/`, replacing the smoke-test
-   `App.tsx`. Add the router (TanStack, **hash history** — `file://` has no
-   server to resolve real paths) and the `nav:goto` subscription that the
-   Settings menu item already sends. Goal: import → list → delete end-to-end.
-2. **Wire up alignment in the renderer.** The estimator and storage exist and
+1. **Wire up alignment in the renderer.** The estimator and storage exist and
    are tested; nothing calls them yet. Needs: fetch `song-audio://` → Web Audio
    `decodeAudioData` → `OfflineAudioContext` resample to 22050 mono →
    `onsetEnvelope` → `estimateAlignment` → `songs.setAlignment`. Then a Sync UI
    showing confidence with a **±1 bar nudge** and an audible preview, because
    auto-align cannot pick the right bar on its own (see CHANGELOG).
-3. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
+2. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
    judging against `audioEl.currentTime`. Must apply `song.alignment` when
    building the playable chart, and should warn when `alignment.source ===
    "none"` rather than judging a drifting chart silently.
-4. **Port Results, Settings, Calibration.**
-5. **Write the pure-function tests** — `chart.ts` (parsing, difficulty) is
-   already split out to be testable without Electron; add accuracy/score math
-   and judgment bucketing once gameplay lands. Vitest is installed, no tests
-   written yet.
-6. **Add an app icon** — electron-builder warns "default Electron icon is used".
+3. **Port Results, Settings, Calibration.** All three are placeholder screens
+   right now (`renderer/views/placeholders.tsx`) that say what's missing.
+4. **More pure-function tests** — 18 alignment tests exist. `chart.ts`
+   (parsing, difficulty) is split out to be testable without Electron but has no
+   tests yet; add accuracy/score math and judgment bucketing once gameplay lands.
+5. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-7. **Set up ESLint** — there is deliberately no `lint` script right now rather
+6. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-8. **Hardware validation pass** — the carried-over checklist in "Notes for next
+7. **Hardware validation pass** — the carried-over checklist in "Notes for next
    session".
 
 ## What's blocked

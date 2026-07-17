@@ -131,7 +131,7 @@ src/
     lib/                    # drums.ts (labels/colors/default mapping), settings.ts, types.ts
     components/ui/          # local Tailwind components (replaces the Glaze design system)
     views/                  # library, gameplay, results, settings, calibration
-    router.tsx              # hash history — file:// has no server to serve real paths
+    router.tsx              # MEMORY history — no URL bar exists, so a URL is pure overhead
 ```
 
 **Bootstrap order is load-bearing.** `protocol.registerSchemesAsPrivileged`
