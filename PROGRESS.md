@@ -129,11 +129,12 @@ Prioritized. Top item is immediately actionable.
 2. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
    (parsing, difficulty) is split out to be testable without Electron but still
    has none.
-4. **Upgrade alignment to DTW** (optional, from the eval harness write-up). The
-   linear offset+tempoScale leaves a ~82ms bow mid-song on the Queen pair,
-   because that recording's tempo isn't merely different — it isn't constant. A
-   nonlinear time map handles rubato natively. Banded DTW over ~17k onset frames
-   is fast in numpy. See `scripts/eval/README.md`.
+4. **DTW is probably NOT worth building.** It was the plan for the ~82ms bow the
+   linear model leaves on drifty recordings, but Logic's Smart Tempo already
+   does nonlinear tempo mapping with a human in the loop, and the user owns
+   Logic. The app now DETECTS the problem (`analyzeAlignment().breathes`) and
+   points at that tool. Build DTW only if conforming in a DAW proves too tedious
+   in practice — the detection is the part that was missing.
 5. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
 6. **Set up ESLint** — there is deliberately no `lint` script right now rather

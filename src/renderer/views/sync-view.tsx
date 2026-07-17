@@ -21,7 +21,12 @@ import { ArrowLeftIcon, PlayIcon, SquareIcon, WandSparklesIcon } from "lucide-re
 
 import type { SongWithChart } from "../../shared/types.js";
 import { Button, Spinner, useToast } from "../components/ui.js";
-import { estimateAlignment, onsetEnvelope } from "../lib/alignment.js";
+import {
+  analyzeAlignment,
+  describeShift,
+  onsetEnvelope,
+  type AlignmentAnalysis,
+} from "../lib/alignment.js";
 import { AlignmentPreview, loadAnalysisPcm } from "../lib/audio.js";
 
 /** Beat-carrying notes — what the preview clicks on. Hats would be a blur. */
@@ -84,6 +89,8 @@ function SyncEditor({
   const [offsetMs, setOffsetMs] = useState(song.alignment.offsetMs);
   const [tempoScale, setTempoScale] = useState(song.alignment.tempoScale);
   const [confidence, setConfidence] = useState(song.alignment.confidence);
+  const [analysis, setAnalysis] = useState<AlignmentAnalysis | null>(null);
+  const [chosen, setChosen] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -114,13 +121,20 @@ function SyncEditor({
     try {
       const pcm = await loadAnalysisPcm(song);
       const env = onsetEnvelope(pcm);
-      const est = estimateAlignment(env, song.chart);
-      setOffsetMs(est.offsetMs);
-      setTempoScale(est.tempoScale);
-      setConfidence(est.confidence);
+      const result = analyzeAlignment(env, song.chart, { bpm: song.bpm });
+      const best = result.candidates[0];
+
+      setAnalysis(result);
+      setChosen(0);
+      setOffsetMs(best.offsetMs);
+      setTempoScale(best.tempoScale);
+      setConfidence(best.f1);
       setEstimated(true);
+
       toast.success(
-        `Estimated offset ${(est.offsetMs / 1000).toFixed(3)}s, tempo ${(est.tempoScale * 100).toFixed(2)}% — now check it by ear.`,
+        result.confident
+          ? "One option fits clearly better — check it by ear, then save."
+          : "Several options fit almost equally well. Preview each and pick the one that lands on the drums.",
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -128,6 +142,18 @@ function SyncEditor({
       setAnalyzing(false);
     }
   }, [song, toast]);
+
+  const pickCandidate = (index: number) => {
+    const c = analysis?.candidates[index];
+    if (!c) return;
+    setChosen(index);
+    setOffsetMs(c.offsetMs);
+    setTempoScale(c.tempoScale);
+    setConfidence(c.f1);
+    // Choosing from the ranked list is still the machine's answer, not a human
+    // override — only a manual nudge counts as "manual".
+    setEstimated(true);
+  };
 
   const togglePreview = async () => {
     if (playing) {
@@ -197,26 +223,77 @@ function SyncEditor({
             </Button>
           </div>
 
-          {confidence > 0 && (
-            <div className="mt-4 rounded-lg bg-surface p-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-text-muted">Confidence</span>
-                <span
-                  className="font-mono font-medium"
-                  style={{ color: confidence > 1.5 ? "#22c55e" : "#f97316" }}
-                >
-                  {confidence.toFixed(2)}
-                </span>
-                <span className="text-text-muted">
-                  {confidence > 1.5 ? "locked onto the groove" : "weak — check carefully"}
-                </span>
+          {analysis && (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg bg-surface p-3 text-xs">
+                {analysis.confident ? (
+                  <p>
+                    <span className="font-medium text-drum-tom">One clear winner.</span>{" "}
+                    <span className="text-text-muted">
+                      It fits better than the alternatives below — still worth one preview.
+                    </span>
+                  </p>
+                ) : (
+                  <p>
+                    <span className="font-medium text-drum-crash">Too close to call.</span>{" "}
+                    <span className="text-text-muted">
+                      These fit almost equally well, because every bar of a groove looks alike.
+                      Preview them and pick the one whose clicks land on the drums — your ear can
+                      settle this and the maths can&apos;t.
+                    </span>
+                  </p>
+                )}
               </div>
-              {/* The single most important sentence on this screen. */}
-              <p className="mt-2 text-text-muted">
-                This does <strong className="text-text-primary">not</strong> mean the bar is right.
-                Every bar of a groove looks alike, so the estimate can be a whole bar off. Preview it
-                and nudge until the clicks land on the drums.
-              </p>
+
+              <div className="space-y-1">
+                {analysis.candidates.slice(0, 4).map((c, i) => (
+                  <button
+                    key={c.beatsFromSeed}
+                    onClick={() => pickCandidate(i)}
+                    className={`titlebar-no-drag flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs transition ${
+                      i === chosen
+                        ? "bg-drum-hihat/15 outline outline-1 outline-drum-hihat"
+                        : "bg-surface hover:bg-surface-hover"
+                    }`}
+                  >
+                    <span className="w-16 shrink-0 font-medium">
+                      {describeShift(c.beatsFromSeed)}
+                    </span>
+                    <span className="w-20 shrink-0 font-mono text-text-muted">
+                      {(c.offsetMs / 1000).toFixed(3)}s
+                    </span>
+                    {/* Fit bar: the comparison is the point, so show it visually
+                        rather than making anyone read four decimals. */}
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-border-subtle">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${c.f1 * 100}%`,
+                          backgroundColor: i === 0 ? "#facc15" : "#8b8b9a",
+                        }}
+                      />
+                    </span>
+                    <span className="w-10 shrink-0 text-right font-mono text-text-muted">
+                      {(c.f1 * 100).toFixed(0)}%
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {analysis.breathes && (
+                <div className="rounded-lg border border-drum-crash/40 bg-drum-crash/10 p-3 text-xs">
+                  <span className="font-medium text-drum-crash">
+                    This recording doesn&apos;t hold one tempo.
+                  </span>{" "}
+                  <span className="text-text-muted">
+                    Even at its best fit, parts of the song drift about{" "}
+                    {analysis.residualMs.toFixed(0)}ms away — more than a Perfect window. Expect the
+                    middle of the song to judge as Early/Late even when you play it right. Fixing it
+                    properly means conforming the MIDI to the recording&apos;s real tempo in a DAW
+                    (Logic&apos;s Smart Tempo) and re-importing.
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </section>

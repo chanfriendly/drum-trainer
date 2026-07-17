@@ -5,6 +5,59 @@ Most recent first.
 
 ---
 
+### 2026-07-17: Ranked alignment candidates — the way out of the bar ambiguity
+
+Auto-align used to hand back one answer it couldn't defend, and the UI told the
+player to nudge until it sounded right. Now it enumerates the alternatives,
+scores them symmetrically, and reports them ranked with the margin between them.
+
+**The metric was the whole problem, and the fix was already written down** — in
+tests/alignment.test.ts: *"If the metric is ever changed to penalise unmatched
+audio onsets, landmarks WOULD start to help."* The old score is a MEAN of
+envelope strength where chart notes land: it rewards notes hitting onsets and is
+blind both to onsets nobody played and to notes landing in silence. That is
+precisely why every bar looks alike to it. `scoreSymmetric` counts both
+directions (an F1 over chart↔audio), so a shifted chart starts before the drums
+come in and leaves real hits unexplained at the end. The song's edges finally
+count.
+
+**Two measurements changed the design mid-build:**
+
+1. *The ambiguity is per-BEAT, not per-bar.* Enumerating whole bars left the
+   truth outside the candidate set entirely — a synthetic test failed by exactly
+   501ms, one beat at 120bpm. A kick/snare groove repeats every two beats, so
+   candidates are now spaced by beats and labelled "+1 beat" / "−1 bar".
+2. *Precision was capped and nearly useless.* Scoring only kick/snare notes
+   against ALL audio onsets caps precision at roughly beatNotes/onsets —
+   measured 0.545 for the truth vs 0.505 for the runner-up, i.e. flat. Feeding
+   the symmetric score every note (while the seed search keeps using beat notes,
+   since hats smear a mean) took the oracle from F1 0.70 → 0.82 with precision
+   0.807.
+
+**And it forced an honest constant.** The confidence threshold was invented at
+0.08. Measured on the oracle — audio rendered from its own chart, the clearest
+case that can exist — the truth beats the runner-up by only **0.050** (0.819 vs
+0.769). Repetitive grooves just don't separate by much. The threshold is now 0.04,
+calibrated on that single data point, documented as such, and `confident` is a
+hint that sets the UI's tone rather than permission to skip the preview.
+
+**Fit residual / "this recording breathes".** The linear model assumes one tempo.
+`analyzeAlignment` now fits each 20s window's own best offset (searched ±0.4s —
+under half a bar, so a window can't hop a bar and call it residual) and reports
+the worst deviation. Over 25ms means no single tempo fits the take, and the UI
+says so and points at Logic's Smart Tempo. This answers "will this file work?"
+BEFORE playing it — the old "drift" number only reported the linear mismatch and
+was silent about the wobble around it.
+
+12 new tests (65 total), including the oracle asserting the winner is right, the
+margin is real, and precision is doing work.
+
+**NOT VERIFIED:** the candidate list's rendering. The screen locked mid-test, so
+the UI has only been type-checked and its logic unit-tested. Drive it before
+trusting it.
+
+---
+
 ### 2026-07-17: Calibration, and a getting-started guide
 
 The last placeholder is gone — **all five screens are real**, plus Sync.

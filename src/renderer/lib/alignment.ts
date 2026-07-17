@@ -302,3 +302,261 @@ export function chartTimeToAudioTime(
 ): number {
   return chartSeconds * alignment.tempoScale + alignment.offsetMs / 1000;
 }
+
+// ── Candidate ranking (the way out of the bar ambiguity) ──────────────
+
+/**
+ * Audio onset times, in seconds.
+ *
+ * `estimateAlignment` only ever asks "is there energy where a chart note
+ * lands?". It never asks the reverse — "is there a chart note for this hit?" —
+ * so a bar-shifted chart, which still lands on real hits, scores identically.
+ * Detecting the onsets explicitly is what makes the reverse question askable.
+ */
+export function detectOnsets(env: OnsetEnvelope, threshold = 0.5): number[] {
+  const { strength, fps } = env;
+  const refractory = Math.max(1, Math.round(0.03 * fps)); // one strike = one onset
+  const times: number[] = [];
+  let last = -Infinity;
+
+  for (let i = 1; i < strength.length - 1; i++) {
+    if (strength[i] < threshold) continue;
+    if (strength[i] < strength[i - 1] || strength[i] < strength[i + 1]) continue;
+    if (i - last < refractory) continue;
+    times.push(timeOfFrame(i, fps));
+    last = i;
+  }
+  return times;
+}
+
+export interface AlignmentScore {
+  /** Share of AUDIO onsets that a chart note explains. */
+  precision: number;
+  /** Share of CHART notes that land on an audio onset. */
+  recall: number;
+  f1: number;
+}
+
+/**
+ * Symmetric score: how well do the chart and the audio explain EACH OTHER?
+ *
+ * This is the fix for bar ambiguity. `score()` above is a mean — it rewards
+ * notes hitting onsets and is blind to onsets nobody played and notes landing
+ * in silence, which is exactly why every bar looks alike to it. Counting both
+ * directions makes a song's edges matter: a chart shifted a bar early starts
+ * before the drums come in (recall drops) and leaves real hits at the end
+ * unexplained (precision drops).
+ *
+ * Precision is depressed on a full mix, where bass and vocals produce onsets no
+ * drum chart will ever explain. That's fine: candidates are compared against
+ * each other on the same audio, so the penalty is common to all of them and
+ * cancels in the ranking. Read the RANKING, not the absolute number.
+ */
+export function scoreSymmetric(
+  chartAudioTimes: number[],
+  onsetTimes: number[],
+  toleranceSec = 0.03,
+): AlignmentScore {
+  if (chartAudioTimes.length === 0 || onsetTimes.length === 0) {
+    return { precision: 0, recall: 0, f1: 0 };
+  }
+
+  // Both lists are sorted, so a merge-style sweep beats a nested scan.
+  const nearest = (needles: number[], haystack: number[]): number => {
+    let hits = 0;
+    let j = 0;
+    for (const t of needles) {
+      while (j + 1 < haystack.length && Math.abs(haystack[j + 1] - t) <= Math.abs(haystack[j] - t)) {
+        j++;
+      }
+      if (Math.abs(haystack[j] - t) <= toleranceSec) hits++;
+    }
+    return hits;
+  };
+
+  const recall = nearest(chartAudioTimes, onsetTimes) / chartAudioTimes.length;
+  const precision = nearest(onsetTimes, chartAudioTimes) / onsetTimes.length;
+  const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+  return { precision, recall, f1 };
+}
+
+export interface AlignmentCandidate extends AlignmentScore {
+  offsetMs: number;
+  tempoScale: number;
+  /**
+   * BEATS away from the estimator's first guess. 0 is the raw estimate.
+   *
+   * Beats, not bars. Enumerating only whole bars was wrong: the seed can land a
+   * single BEAT off (a kick/snare groove repeats every two beats, not every
+   * bar), and then the truth isn't in the candidate set at all — measured as a
+   * clean 501ms error at 120bpm, i.e. exactly one beat.
+   */
+  beatsFromSeed: number;
+}
+
+/** Human label for a candidate's shift: "+1 bar", "−2 beats", "estimate". */
+export function describeShift(beatsFromSeed: number, beatsPerBar = 4): string {
+  if (beatsFromSeed === 0) return "estimate";
+  const sign = beatsFromSeed > 0 ? "+" : "−";
+  const n = Math.abs(beatsFromSeed);
+  if (n % beatsPerBar === 0) {
+    const bars = n / beatsPerBar;
+    return `${sign}${bars} bar${bars === 1 ? "" : "s"}`;
+  }
+  return `${sign}${n} beat${n === 1 ? "" : "s"}`;
+}
+
+export interface AlignmentAnalysis {
+  /** Best first. */
+  candidates: AlignmentCandidate[];
+  /** True when the winner beats the runner-up clearly enough to just pick it. */
+  confident: boolean;
+  /** F1 gap between the top two. The number behind `confident`. */
+  margin: number;
+  /**
+   * Worst per-window timing residual after the linear fit, ms.
+   *
+   * The linear model assumes the recording holds ONE tempo. Real playing
+   * breathes. This measures what the straight line couldn't explain: fit each
+   * 20s window's own best offset and see how far they wander from the line.
+   */
+  residualMs: number;
+  /** Residual exceeds the Perfect window: no single tempo can fit this take. */
+  breathes: boolean;
+}
+
+/**
+ * F1 gap above which the winner is treated as obviously right.
+ *
+ * CALIBRATED ON ONE SONG, so treat it as what it is. On the oracle — audio
+ * rendered from its own chart, the clearest case that can exist — the true
+ * alignment beats the runner-up by only 0.050 (0.819 vs 0.769). A repetitive
+ * groove simply doesn't separate by much, even with a symmetric metric: shifting
+ * a beat still lands most notes on real hits, and only the song's edges, fills
+ * and breaks disagree.
+ *
+ * So this is set just under that, and `confident` is a HINT that sets the UI's
+ * tone — never permission to skip the preview. The margin is reported alongside
+ * it precisely so nobody has to trust this constant.
+ */
+const CONFIDENT_MARGIN = 0.04;
+
+/**
+ * Rank the plausible alignments instead of guessing one.
+ *
+ * `estimateAlignment` finds a good fit but cannot know which BAR it landed on.
+ * This enumerates the bar-shifted alternatives, scores each symmetrically, and
+ * reports them ranked with the margin between them — so the UI can say "this
+ * one, clearly" or "these two are nearly tied, listen to both" instead of
+ * silently picking and hoping.
+ *
+ * Needs `bpm` to know how long a bar is. Without it there is only one candidate,
+ * which is honest: we cannot enumerate alternatives we can't measure.
+ */
+export function analyzeAlignment(
+  env: OnsetEnvelope,
+  chart: { time: number; midiNote: number }[],
+  options: { bpm?: number | null; beatsPerBar?: number; maxBars?: number } = {},
+): AlignmentAnalysis {
+  const { bpm, beatsPerBar = 4, maxBars = 2 } = options;
+
+  const seed = estimateAlignment(env, chart);
+  const onsets = detectOnsets(env);
+
+  /**
+   * ALL notes here, not just kick/snare — the opposite of what the seed search
+   * wants, and deliberately so.
+   *
+   * The mean-based seed uses beat notes because dense hats smear an average.
+   * But precision asks "what share of AUDIO onsets does the chart explain?", and
+   * scoring only kick/snare against every onset caps it at roughly
+   * beatNotes/onsets — measured at 0.545 on the oracle, with the runner-up at
+   * 0.505. Nearly flat, i.e. nearly useless for ranking. Feeding it every note
+   * lets an onset actually be explained.
+   */
+  const times = chart.map((n) => n.time);
+
+  const scoreAt = (offsetMs: number): AlignmentScore =>
+    scoreSymmetric(
+      times.map((t) => t * seed.tempoScale + offsetMs / 1000),
+      onsets,
+    );
+
+  const candidates: AlignmentCandidate[] = [];
+  const beatSec = bpm ? 60 / bpm : null;
+  // Beat granularity, spanning ±maxBars worth of beats. A groove aliases at the
+  // beat, so bar-only candidates can miss the truth entirely.
+  const maxBeats = maxBars * beatsPerBar;
+  const shifts = beatSec ? Array.from({ length: maxBeats * 2 + 1 }, (_, i) => i - maxBeats) : [0];
+
+  for (const beats of shifts) {
+    let offsetMs = seed.offsetMs + beats * (beatSec ?? 0) * 1000;
+
+    // Re-tune each candidate locally: the bar-shifted position may sit slightly
+    // better a few ms either way, and judging candidates at a stale offset would
+    // rank them on a handicap rather than on merit.
+    let best = { offsetMs, score: scoreAt(offsetMs) };
+    for (let d = -40; d <= 40; d += 5) {
+      const score = scoreAt(offsetMs + d);
+      if (score.f1 > best.score.f1) best = { offsetMs: offsetMs + d, score };
+    }
+    offsetMs = best.offsetMs;
+
+    candidates.push({
+      offsetMs,
+      tempoScale: seed.tempoScale,
+      beatsFromSeed: beats,
+      ...best.score,
+    });
+  }
+
+  candidates.sort((a, b) => b.f1 - a.f1);
+  const margin = candidates.length > 1 ? candidates[0].f1 - candidates[1].f1 : 1;
+
+  return {
+    candidates,
+    margin,
+    confident: candidates.length === 1 || margin >= CONFIDENT_MARGIN,
+    ...residualFor(env, times, candidates[0]),
+  };
+}
+
+/**
+ * How much of the timing the straight line failed to explain.
+ *
+ * Each window is searched only ±0.4s around the global fit — less than half a
+ * bar at any sane tempo, so a window cannot silently hop to a neighbouring bar
+ * and report that hop as "residual".
+ */
+function residualFor(
+  env: OnsetEnvelope,
+  chartTimes: number[],
+  best: { offsetMs: number; tempoScale: number },
+): { residualMs: number; breathes: boolean } {
+  const span = chartTimes[chartTimes.length - 1] ?? 0;
+  if (span < 40) return { residualMs: 0, breathes: false }; // too short to drift
+
+  const windowSec = 20;
+  const residuals: number[] = [];
+
+  for (let start = 0; start + windowSec <= span; start += windowSec) {
+    const inWindow = chartTimes.filter((t) => t >= start && t < start + windowSec);
+    if (inWindow.length < 10) continue;
+
+    let bestLocal = { delta: 0, value: -Infinity };
+    for (let delta = -0.4; delta <= 0.4; delta += 1 / (env.fps * 2)) {
+      const value = score(
+        env,
+        Float32Array.from(inWindow),
+        best.tempoScale,
+        best.offsetMs / 1000 + delta,
+        Math.max(5, Math.floor(inWindow.length * 0.5)),
+      );
+      if (value > bestLocal.value) bestLocal = { delta, value };
+    }
+    residuals.push(Math.abs(bestLocal.delta) * 1000);
+  }
+
+  const residualMs = residuals.length ? Math.max(...residuals) : 0;
+  return { residualMs, breathes: residualMs > 25 };
+}
