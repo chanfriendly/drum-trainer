@@ -5,6 +5,62 @@ Most recent first.
 
 ---
 
+### 2026-07-17: Transcription evaluation harness
+
+`scripts/eval/` — answers "how good would audio transcription have to get before
+it could replace a MIDI chart?". The rule that the app never charts from audio
+does not change; this measures what the alternative would cost. Reference MIDI vs
+candidate transcription, Hungarian matching within tolerance, per-lane P/R/F1, a
+time-only confusion matrix, and a timing histogram, scored at BOTH ±25ms (the
+app's Perfect window) and ±50ms (the research standard).
+
+The harness is the durable part; the bundled transcriber (spectral flux + band
+energy, no downloads) is a deliberate floor that a real ADT model swaps in behind
+`--candidate`.
+
+**It caught a bug in itself, twice.** First run: mean timing error -31.7ms with a
+stdev of 4.8ms — a bias that constant is never transcription error, it's framing.
+The same FRAME_LEAD trap as alignment.ts. Then the fix went in with the WRONG
+SIGN, doubling the error to -60ms and collapsing F1 to ~0, which is how the sign
+got caught. Corrected: mean -2.9ms, stdev 3.8ms. The lesson generalises: a tight
+stdev around a non-zero mean is a systematic bug, and the spread is the number to
+read, not the average.
+
+**Timing is not the bottleneck — classification is.** On Practice Groove (the
+only clean evaluation), ±25ms F1 is 51.3% and ±50ms is 51.6%. The gap is 0.3
+points and 99.3% of matched onsets land inside ±25ms. That settles the earlier
+open question about the ±25/±50 gap: once framing is right, onset placement on
+clean audio is solved. Per lane the failures are lopsided — kick 80%, hihat 64%,
+but ride 3.5% (1 of 56, called a hi-hat 40 times), snare 0%, tom 0%. The
+predicted cymbal confusion arrived exactly as predicted.
+
+**On a real mix it falls apart informatively.** Queen (confounded): 17.8% F1 at
+±25ms. The interesting part is what it INVENTS: the chart has zero crashes,
+rides and toms; the baseline reported 402 crashes, 248 rides and 13 toms — 663
+notes hallucinated from guitar, bass and vocal energy landing in the bands the
+classifier reads as cymbals. Isolated drums never told us that; one run on a real
+record did. Timing stdev jumps 3.8ms → 25.2ms and the ±25/±50 gap reopens, but
+that is partly the confounded alignment and the harness cannot separate the two —
+which is the honest limit of a confounded evaluation, and why it prints a warning
+rather than a tidy number.
+
+**Conclusion:** transcription is nowhere near replacing a MIDI chart, and the
+reason is specific — classification (especially cymbals) and catastrophic false
+positives in a full mix, not timing. Source separation before transcription
+attacks exactly that failure; the harness makes the experiment cheap.
+
+**Sheet music** (asked alongside): digital scores are a SOURCE OF MIDI, not a new
+input type — MusicXML/Guitar Pro/MuseScore export MIDI directly, needing zero app
+code, and covering songs with no standalone .mid. Scanned notation needs OMR,
+weakest exactly on percussion. Either way it does NOT solve alignment: it's in
+musical time and has no idea the recording sags to 109.68bpm. The complementary
+pairing (notes from the symbolic source, times from the audio) is score-to-audio
+alignment, and the concrete upgrade there is DTW instead of the linear
+offset+tempoScale — a nonlinear map would eat the ~82ms bow the linear model
+leaves mid-song on the Queen pair. Written up in scripts/eval/README.md.
+
+---
+
 ### 2026-07-17: Settings, Results, and a committed MIDI harness
 
 **`scripts/midi-sim.mjs` — the kit simulator.** The IAC bus cuts both ways: the

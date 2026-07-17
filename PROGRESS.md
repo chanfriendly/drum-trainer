@@ -81,6 +81,11 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
       windows, latency offset. Learn captured note 39 (Hand Clap) onto Snare via
       the harness and persisted across a remount. Results: real saved run renders
       correctly (3,004 / 7.2% / 20x / 316) with per-drum bars.
+- [x] 2026-07-17 — **Transcription eval harness** (`scripts/eval/`). Findings:
+      timing is NOT the bottleneck (±25ms F1 51.3% vs ±50ms 51.6% on the oracle —
+      a 0.3pt gap); classification is (ride 3.5%, snare 0%). On the real mix it
+      hallucinates 663 cymbal notes that don't exist in the chart. It also caught
+      a FRAME_LEAD bug in itself, then a sign error in the fix. See its README.
 - [x] 2026-07-17 — **`scripts/midi-sim.mjs` committed** — plays the part of an
       e-kit over the IAC bus (`burst`/`note`/`chart`/`devices`). `npm run midi-sim`.
 - [x] 2026-07-16 — **Gameplay done and verified with REAL MIDI**: canvas lanes,
@@ -107,18 +112,25 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
 
 Prioritized. Top item is immediately actionable.
 
-1. **Port Calibration** — tap along to a metronome to derive `latencyOffsetMs`.
-   The last placeholder. That offset is HARDWARE lag only; song alignment is
-   separate and done. Testable with `npm run midi-sim burst`, though the derived
-   number is only meaningful from real taps.
+1. **Port Calibration** — the last placeholder, and the last gap before a real
+   practice session: without it `latencyOffsetMs` starts at 0 and must be typed
+   in by hand in Settings. Tap along to a metronome to derive it.
+   That offset is HARDWARE lag only; song alignment is separate and done.
+   Testable with `npm run midi-sim burst`, though the derived number is only
+   meaningful from real taps.
 2. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
    (parsing, difficulty) is split out to be testable without Electron but still
    has none.
-3. **Add an app icon** — electron-builder warns "default Electron icon is used".
+3. **Upgrade alignment to DTW** (optional, from the eval harness write-up). The
+   linear offset+tempoScale leaves a ~82ms bow mid-song on the Queen pair,
+   because that recording's tempo isn't merely different — it isn't constant. A
+   nonlinear time map handles rubato natively. Banded DTW over ~17k onset frames
+   is fast in numpy. See `scripts/eval/README.md`.
+4. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-4. **Set up ESLint** — there is deliberately no `lint` script right now rather
+5. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-5. **Hardware validation pass** — the carried-over checklist in "Notes for next
+6. **Hardware validation pass** — the carried-over checklist in "Notes for next
    session".
 
 ## What's blocked
