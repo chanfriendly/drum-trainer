@@ -14,7 +14,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MusicIcon, PlayIcon, PlusIcon, SettingsIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
 
 import type { Difficulty, SongMeta, SongResult } from "../../shared/types.js";
-import { Badge, Button, ConfirmDialog, EmptyState, Spinner, useToast } from "../components/ui.js";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  InfoTip,
+  Spinner,
+  useToast,
+} from "../components/ui.js";
 import { formatDuration } from "../lib/drums.js";
 
 const DIFFICULTY_COLOR: Record<Difficulty, string> = {
@@ -110,6 +118,36 @@ export function LibraryView() {
           >
             <SettingsIcon className="size-4" />
           </Button>
+          <InfoTip label="What makes a good import">
+            <div className="space-y-2.5">
+              <p className="font-medium text-text-primary">A song is two files: audio + MIDI.</p>
+              <p>
+                The MIDI holds the drum chart — the app never guesses notes from audio, so the
+                chart is only as good as the MIDI you give it.
+              </p>
+              <ul className="space-y-1.5">
+                <li>
+                  <span className="text-text-primary">Audio:</span> mp3, m4a, wav, aac, ogg, or
+                  flac. Lossless (flac/wav) is best, but any of these work.
+                </li>
+                <li>
+                  <span className="text-text-primary">MIDI:</span> a .mid with a real drum track.
+                  No standalone .mid? Export one from{" "}
+                  <span className="text-text-primary">MuseScore or Guitar Pro</span> — digital
+                  sheet music exports MIDI directly.
+                </li>
+              </ul>
+              <p>
+                <span className="text-text-primary">Then sync it.</span> A recording and a
+                transcription rarely share a clock, so every song needs the Sync step before the
+                chart lines up with what you hear. Songs recorded to a click (most modern music)
+                sync in seconds; older or live takes may drift — the Sync screen tells you which.
+              </p>
+              <p className="text-text-muted/80">
+                Scanned/paper sheet music won&apos;t work — only digital scores export to MIDI.
+              </p>
+            </div>
+          </InfoTip>
           <Button
             variant="accent"
             onClick={() => importMutation.mutate()}

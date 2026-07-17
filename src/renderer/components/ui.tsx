@@ -8,12 +8,75 @@
  * The gameplay canvas uses NONE of this — it's a raw <canvas> on rAF.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { XIcon } from "lucide-react";
+import { InfoIcon, XIcon } from "lucide-react";
 
 function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
+}
+
+// ── InfoTip ───────────────────────────────────────────────────────────
+
+/**
+ * A small "?"-style info button whose panel opens on hover AND on
+ * focus/click, so it works with a mouse and a keyboard both.
+ *
+ * The panel is anchored to the RIGHT edge of the trigger and grows leftward,
+ * because every current use sits in the top-right corner where a left-anchored
+ * panel would spill off-screen. `titlebar-no-drag` is required: the trigger
+ * lives in the draggable titlebar and would otherwise never receive the hover.
+ */
+export function InfoTip({ label = "More info", children }: { label?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A small close delay lets the pointer travel from the icon into the panel
+  // without the gap between them dismissing it mid-move.
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 120);
+  };
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  return (
+    <span
+      className="relative inline-flex titlebar-no-drag"
+      onMouseEnter={() => {
+        cancelClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
+    >
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        onBlur={scheduleClose}
+        onClick={() => setOpen((v) => !v)}
+        // no-drag on the BUTTON itself, not just the span: inside the titlebar
+        // drag region, only the element directly under the cursor is consulted
+        // for app-region, and a bare button there reads as window-drag rather
+        // than a click. Matches the Button component's proven pattern.
+        className="titlebar-no-drag inline-flex size-7 items-center justify-center rounded-lg text-text-muted transition hover:bg-surface-hover hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-drum-hihat"
+      >
+        <InfoIcon className="size-4" />
+      </button>
+
+      {open && (
+        <div
+          role="tooltip"
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border-subtle bg-surface-raised p-4 text-left text-xs leading-relaxed text-text-muted shadow-2xl"
+        >
+          {children}
+        </div>
+      )}
+    </span>
+  );
 }
 
 // ── Button ────────────────────────────────────────────────────────────
