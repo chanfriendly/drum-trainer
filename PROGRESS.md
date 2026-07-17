@@ -10,12 +10,15 @@ Verified by driving it with real MIDI over the IAC bus (a script plays the part
 of an e-kit), and the saved result's accounting is exact — every note resolved
 once, accuracy matching a hand-check of the spec formula.
 
-Library, Sync, Gameplay, Settings, and Results are real. **Calibration is the
-only placeholder left.**
+**All five screens are real** — plus Sync, which the spec didn't anticipate.
+There are no placeholders left.
 
-**The app is ready for a real kit.** Settings has the device picker, so nothing
-needs hand-editing any more. `npm run midi-sim` plays the part of a kit for
-everything except feel.
+**The app is ready for a real kit.** See README.md for the getting-started flow.
+`npm run midi-sim` plays the part of a kit for everything except feel.
+
+Measured end-to-end MIDI jitter is **±4ms** (Calibration, machine-tapped at exact
+600ms intervals) — well inside the ±25ms Perfect window. The plumbing is precise
+enough to judge drumming; that was an open question until 2026-07-17.
 
 Two risks retired, both by measurement rather than inspection:
 - The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
@@ -81,6 +84,11 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
       windows, latency offset. Learn captured note 39 (Hand Clap) onto Snare via
       the harness and persisted across a remount. Results: real saved run renders
       correctly (3,004 / 7.2% / 20x / 316) with per-drum bars.
+- [x] 2026-07-17 — **Calibration done + README written. No placeholders left.**
+      Verified in the app with a machine tapper: ±4ms consistency, "Tight and
+      consistent", save path confirmed. Median (not mean) + MAD spread, settling
+      taps discarded, scattered runs refused rather than fabricating an offset.
+      53 tests.
 - [x] 2026-07-17 — **Transcription eval harness** (`scripts/eval/`). Findings:
       timing is NOT the bottleneck (±25ms F1 51.3% vs ±50ms 51.6% on the oracle —
       a 0.3pt gap); classification is (ride 3.5%, snare 0%). On the real mix it
@@ -121,17 +129,16 @@ Prioritized. Top item is immediately actionable.
 2. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
    (parsing, difficulty) is split out to be testable without Electron but still
    has none.
-3. **Upgrade alignment to DTW** (optional, from the eval harness write-up). The
+4. **Upgrade alignment to DTW** (optional, from the eval harness write-up). The
    linear offset+tempoScale leaves a ~82ms bow mid-song on the Queen pair,
    because that recording's tempo isn't merely different — it isn't constant. A
    nonlinear time map handles rubato natively. Banded DTW over ~17k onset frames
    is fast in numpy. See `scripts/eval/README.md`.
-4. **Add an app icon** — electron-builder warns "default Electron icon is used".
+5. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-5. **Set up ESLint** — there is deliberately no `lint` script right now rather
+6. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-6. **Hardware validation pass** — the carried-over checklist in "Notes for next
-   session".
+
 
 ## What's blocked
 

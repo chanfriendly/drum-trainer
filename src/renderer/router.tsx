@@ -22,7 +22,7 @@ import { SyncView } from "./views/sync-view.js";
 import { GameplayView } from "./views/gameplay-view.js";
 import { SettingsView } from "./views/settings-view.js";
 import { ResultsView } from "./views/results-view.js";
-import { CalibrationView } from "./views/placeholders.js";
+import { CalibrationView } from "./views/calibration-view.js";
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootView,

@@ -5,6 +5,46 @@ Most recent first.
 
 ---
 
+### 2026-07-17: Calibration, and a getting-started guide
+
+The last placeholder is gone — **all five screens are real**, plus Sync.
+
+**Calibration** derives `latencyOffsetMs` from tapping along to a metronome.
+Design notes worth keeping:
+
+- *Median, not mean.* One flubbed tap 300ms out drags a mean of twelve samples by
+  25ms — the entire Perfect window. Spread is reported as a MAD, which one
+  outlier can't inflate either.
+- *Consistency is the honest number.* A confident-looking offset built from
+  scattered taps is worse than none, so a run with >50ms spread is REFUSED rather
+  than saved. The UI leads with consistency, not the offset.
+- *It measures the player, not just the gear, and that's correct.* Humans tap
+  early against a metronome (negative mean asynchrony, 20-50ms, person-specific).
+  That bias belongs in the number because the goal is judging THIS player fairly
+  — which also means the offset is per-player, not a kit constant.
+- *Clock assumption, stated in the file:* gameplay judges against an `<audio>`
+  element's currentTime; calibration schedules on an AudioContext and reads
+  `ctx.currentTime`. Different playback paths. They share an output device so
+  they should agree, but "should" is doing work — it's the first thing to suspect
+  if a calibrated offset feels wrong in play.
+
+**Measured: end-to-end MIDI jitter is ±4ms.** A machine tapping at exact 600ms
+intervals produced 4ms of scatter through CoreMIDI → addon → IPC → clock read.
+That's well inside the ±25ms Perfect window, and it answers a question open since
+session 0: the plumbing is precise enough to judge drumming. Human taps will be
+looser, but the floor isn't the software.
+
+**README.md** — the getting-started guide, written to answer "what would we tell
+a new user?". The load-bearing parts: the kit needs nothing but USB (no Logic, no
+DAW); sheet music is a SOURCE OF MIDI (MuseScore/Guitar Pro export) rather than a
+separate input; Sync is not optional and the bar nudge is not polish; and a
+symptom table whose rule of thumb is **consistent error = settings, growing error
+= sync** — the distinction this whole codebase keeps having to teach.
+
+17 new tests (53 total).
+
+---
+
 ### 2026-07-17: Transcription evaluation harness
 
 `scripts/eval/` — answers "how good would audio transcription have to get before
