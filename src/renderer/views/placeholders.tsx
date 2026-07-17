@@ -31,16 +31,6 @@ function Placeholder({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-export function GameplayView() {
-  const { songId } = useParams({ from: "/gameplay/$songId" });
-  return (
-    <Placeholder
-      title="Gameplay"
-      detail={`Song ${songId}. The scrolling lane canvas, audio playback over song-audio://, and live judging go here. It must apply the song's alignment and warn when the song is unsynced.`}
-    />
-  );
-}
-
 export function ResultsView() {
   const { songId } = useParams({ from: "/results/$songId" });
   return (

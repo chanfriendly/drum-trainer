@@ -5,15 +5,19 @@
 
 ## Current status
 
-**The Library screen works end-to-end in the real app: import → list → delete.**
-The whole backend is ported (MIDI, library, results, chart parsing,
-`song-audio://` protocol), the preload IPC surface is complete, and the app
-packages to a launchable `.dmg`.
+**The core loop works in the real app: import → sync → play → judge → save.**
+Verified by driving it with real MIDI over the IAC bus (a script plays the part
+of an e-kit), and the saved result's accounting is exact — every note resolved
+once, accuracy matching a hand-check of the spec formula.
 
-Of the five screens, Library is real. Gameplay, Results, Settings, and
-Calibration are placeholders that state what's missing
-(`renderer/views/placeholders.tsx`) — a half-built app should never be
-mistakable for a broken one.
+Library, Sync, and Gameplay are real. **Results, Settings, and Calibration are
+still placeholders** (`renderer/views/placeholders.tsx`) that state what's
+missing — a half-built app should never be mistakable for a broken one.
+
+Note Settings being a placeholder means **the MIDI device can only be chosen by
+writing localStorage by hand** (`drumTrainer.settings`, key
+`selectedDeviceIndex`). That is the main thing standing between this and a real
+practice session.
 
 Two risks retired, both by measurement rather than inspection:
 - The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
@@ -35,13 +39,12 @@ replacement, and two of its comments were already found to be wrong (see
 Next work is wiring the alignment estimator into the renderer (it exists and is
 tested, but nothing calls it), then the gameplay canvas.
 
-**Untested surface worth knowing:** `song-audio://` now serves bytes to
-`fetch()` (the Sync screen), but its hand-rolled **Range** handling still has
-never run — `decodeAudioData` fetches the whole file in one request. Seeking in
-gameplay is what will first exercise 206/Content-Range. Expect to find bugs there.
+**`song-audio://` is now fully exercised**: fetch (Sync), media playback, and
+Range/206 seeking (verified by seeking to 58s mid-song).
 
-**Not verified by me:** whether the preview's clicks actually sound aligned, and
-whether the synthesised kit is pleasant to drum against. Both need ears.
+**Not verified by me, and not verifiable from here:** whether a Perfect *feels*
+like a Perfect, whether the Sync preview's clicks sound aligned, and whether the
+synthesised kit is pleasant to drum against. All three need the kit and ears.
 
 ## What's done
 
@@ -75,6 +78,12 @@ whether the synthesised kit is pleasant to drum against. Both need ears.
       to -6.3ms / scale 1.00000 / confidence 4.78.
 - [x] 2026-07-16 — Alignment estimator + per-song storage + 18 tests. NOT yet
       called by any UI.
+- [x] 2026-07-16 — **Gameplay done and verified with REAL MIDI**: canvas lanes,
+      scrolling notes, judging against the audio clock, pause/resume, results
+      saved. Drove it via an IAC-bus sender standing in for an e-kit — score hit
+      3,004 live; saved result accounting exact (9+14+8+10+275 = 316 = total),
+      accuracy 7.22% matching a hand-check of the spec formula. Seeking to 58s
+      exercised Range/206 for the first time.
 - [x] 2026-07-16 — **Sync screen done and verified in the running app**:
       Auto-align → preview (clicks on charted kick/snare) → ±1 bar nudge → save.
       Against the oracle song it returns confidence 4.70 / offset -0.006s /
@@ -93,20 +102,21 @@ whether the synthesised kit is pleasant to drum against. Both need ears.
 
 Prioritized. Top item is immediately actionable.
 
-1. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
-   judging against `audioEl.currentTime`. Must apply `song.alignment` when
-   building the playable chart, and should warn when `alignment.source ===
-   "none"` rather than judging a drifting chart silently.
-2. **Port Results, Settings, Calibration.** All three are placeholder screens
-   right now (`renderer/views/placeholders.tsx`) that say what's missing.
-3. **More pure-function tests** — 18 alignment tests exist. `chart.ts`
-   (parsing, difficulty) is split out to be testable without Electron but has no
-   tests yet; add accuracy/score math and judgment bucketing once gameplay lands.
-4. **Add an app icon** — electron-builder warns "default Electron icon is used".
+1. **Port Settings** — the device picker is the blocker for real play (see
+   Current status). Also the note→drum mapping with per-drum Learn, hit windows,
+   and the latency offset.
+2. **Port Results** — per-song history, newest first. Data is already being
+   saved correctly; nothing reads it yet.
+3. **Port Calibration** — tap along to a metronome to derive `latencyOffsetMs`.
+   That offset is HARDWARE lag only; song alignment is separate and done.
+4. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
+   (parsing, difficulty) is split out to be testable without Electron but still
+   has none.
+5. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-5. **Set up ESLint** — there is deliberately no `lint` script right now rather
+6. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-6. **Hardware validation pass** — the carried-over checklist in "Notes for next
+7. **Hardware validation pass** — the carried-over checklist in "Notes for next
    session".
 
 ## What's blocked

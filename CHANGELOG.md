@@ -5,6 +5,59 @@ Most recent first.
 
 ---
 
+### 2026-07-16: Gameplay — canvas, judging, and the first real MIDI hits
+
+The core loop works end-to-end: **import → sync → play → judge → save → results**.
+
+**Verified by driving the real app with real MIDI.** The IAC bus cuts both ways —
+a script opened an *output* on `IAC Driver Bus 1` and played the part of an
+e-kit, so the whole chain ran for the first time: CoreMIDI → native addon → main
+→ IPC → renderer → judge → HUD. Score reached 3,004 live on screen.
+
+The saved result's accounting is exact, which is the assertion that matters:
+`9 perfect + 14 good + 8 early + 10 late + 275 miss = 316 = totalNotes`. Every
+note resolved exactly once — no double-counting, no leaks. Saved accuracy
+(7.22%) matches an independent hand-check of the spec formula to the digit.
+(275 misses is correct: the sender only ran for 9s of a 61s song.)
+
+**Range requests work.** Seeking to 58s in the console worked
+(`seeked to 58, duration 63.7`), which exercised the hand-rolled 206 /
+`Content-Range` path for the first time — the last untested surface in
+`song-audio://`. `decodeAudioData` fetches whole files, so only media seeking
+reaches it.
+
+**Alignment is applied once, up front.** Every note's `audioTime` is precomputed
+via `chartTimeToAudioTime`, so the render loop and the judge compare audio time
+to audio time and never think about alignment again. Gameplay warns when
+`alignment.source === "none"` rather than silently judging a drifting chart.
+
+**Three fixes over the Glaze original:**
+
+1. *Pause had no resume.* The original's pause button stopped the audio while
+   the loop kept running against a frozen clock, and the only way out was
+   quitting. Now pause/resume works and judging is disabled while paused, so a
+   stray pad hit can't score.
+2. *The HUD accuracy read as broken.* It used the spec formula (denominator =
+   every note in the song), so one Perfect into a 316-note song showed "0.3%" and
+   crawled upward all song — a player would conclude the app was misjudging them.
+   The HUD now shows accuracy over notes RESOLVED so far (`runningAccuracy`);
+   the SAVED result still uses the spec formula (`finalAccuracy`). A test pins
+   that the two converge once every note is resolved.
+3. *Rescanning the whole chart every frame.* Miss detection swept all notes at
+   60fps and hit-matching searched the entire chart per note-on. The chart is
+   sorted, so a cursor now bounds both to the live window.
+
+**Judging math is extracted and tested** (`judgeTiming`, `scoreForHit`,
+`finalAccuracy`, `runningAccuracy`) — 17 new tests, 35 total. It was trapped
+inside a React effect where no assertion could reach it, and these are tuned
+values the spec says to keep exactly. One test caught my own misreading: with
+`goodMs: 50`, a 40ms error is Good, not Late — the windows nest.
+
+**Not verified, and cannot be from here:** whether a Perfect *feels* like a
+Perfect. That needs the kit and ears.
+
+---
+
 ### 2026-07-16: Sync screen — alignment wired into the app
 
 The estimator existed and was tested but nothing called it. Now the Library has a
