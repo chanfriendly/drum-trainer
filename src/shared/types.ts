@@ -108,6 +108,14 @@ export interface SongMeta {
   /** File name only; the bytes are served over `song-audio://`. */
   audioFile: string;
   createdAt: number;
+  /**
+   * The MIDI's first declared tempo, or null if it declares none.
+   *
+   * Used only to size the Sync screen's ±1 bar nudge — auto-alignment is
+   * ambiguous by whole bars, so "nudge one bar" needs to know how long a bar is.
+   * Not used for judging: chart note times are absolute seconds already.
+   */
+  bpm: number | null;
   /** How the chart lines up with the audio. See SongAlignment. */
   alignment: SongAlignment;
 }

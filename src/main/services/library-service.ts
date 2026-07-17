@@ -64,7 +64,7 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
     );
   }
 
-  const { chart, duration } = parsed;
+  const { chart, duration, bpm } = parsed;
   if (chart.length === 0) {
     throw new Error("No drum notes found in that MIDI file. Pick one that contains a drum track.");
   }
@@ -95,6 +95,7 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
       difficulty: difficultyFor(notesPerSecond(chart.length, duration)),
       audioFile,
       createdAt: Date.now(),
+      bpm,
       // Import cannot estimate alignment: the audio decoder lives in the
       // renderer (Web Audio). The renderer runs the estimate and calls
       // songs:setAlignment. Until then `source: "none"` marks it unaligned, and
@@ -125,9 +126,9 @@ async function readSong(id: string): Promise<SongWithChart | null> {
   try {
     const raw = await fs.readFile(path.join(getSongDir(id), "song.json"), "utf-8");
     const song = JSON.parse(raw) as SongWithChart;
-    // Songs written before alignment existed have no `alignment` key. Default it
-    // rather than letting `undefined` reach the renderer's judging math.
-    return { ...song, alignment: song.alignment ?? NO_ALIGNMENT };
+    // Songs written before these fields existed lack them. Default rather than
+    // letting `undefined` reach the renderer's judging math or the Sync screen.
+    return { ...song, alignment: song.alignment ?? NO_ALIGNMENT, bpm: song.bpm ?? null };
   } catch {
     return null;
   }

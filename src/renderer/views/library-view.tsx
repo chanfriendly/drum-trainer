@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MusicIcon, PlayIcon, PlusIcon, SettingsIcon, Trash2Icon } from "lucide-react";
+import { MusicIcon, PlayIcon, PlusIcon, SettingsIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
 
 import type { Difficulty, SongMeta, SongResult } from "../../shared/types.js";
 import { Badge, Button, ConfirmDialog, EmptyState, Spinner, useToast } from "../components/ui.js";
@@ -155,6 +155,7 @@ export function LibraryView() {
                 onResults={() =>
                   void navigate({ to: "/results/$songId", params: { songId: song.id } })
                 }
+                onSync={() => void navigate({ to: "/sync/$songId", params: { songId: song.id } })}
                 onDelete={() => setPendingDelete(song)}
               />
             ))}
@@ -182,12 +183,14 @@ function SongRow({
   best,
   onPlay,
   onResults,
+  onSync,
   onDelete,
 }: {
   song: SongMeta;
   best: SongResult | null;
   onPlay: () => void;
   onResults: () => void;
+  onSync: () => void;
   onDelete: () => void;
 }) {
   const synced = song.alignment.source !== "none";
@@ -203,12 +206,15 @@ function SongRow({
           <span className="truncate font-medium">{song.name}</span>
           <Badge color={DIFFICULTY_COLOR[song.difficulty]}>{song.difficulty}</Badge>
           {!synced && (
-            <Badge
-              color="#f97316"
-              title="The chart hasn't been lined up with the audio yet. Until it is, notes may not match what you hear."
-            >
-              Not synced
-            </Badge>
+            // Clickable: a warning the player can't act on is just nagging.
+            <button onClick={onSync} className="titlebar-no-drag">
+              <Badge
+                color="#f97316"
+                title="The chart hasn't been lined up with the audio yet, so notes may not match what you hear. Click to sync."
+              >
+                Not synced
+              </Badge>
+            </button>
           )}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-text-muted tabular-nums">
@@ -225,6 +231,9 @@ function SongRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <Button variant="ghost" onClick={onSync} aria-label={`Sync ${song.name}`} title="Sync chart to audio">
+          <SlidersHorizontalIcon className="size-4" />
+        </Button>
         <Button variant="accent" onClick={onPlay}>
           <PlayIcon className="size-4" />
           Play

@@ -18,6 +18,7 @@ import {
 
 import { RootView } from "./views/root-view.js";
 import { LibraryView } from "./views/library-view.js";
+import { SyncView } from "./views/sync-view.js";
 import { CalibrationView, GameplayView, ResultsView, SettingsView } from "./views/placeholders.js";
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -55,12 +56,19 @@ const calibrationRoute = createRoute({
   component: CalibrationView,
 });
 
+const syncRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sync/$songId",
+  component: SyncView,
+});
+
 const routeTree = rootRoute.addChildren([
   libraryRoute,
   gameplayRoute,
   resultsRoute,
   settingsRoute,
   calibrationRoute,
+  syncRoute,
 ]);
 
 export const queryClient = new QueryClient({

@@ -8,12 +8,21 @@
       on <html> from first byte so there is no light flash before React mounts.
       There is intentionally no theme toggle — see CLAUDE.md → Conventions.
 
-      CSP: no remote origins. `song-audio:` is the media source; the app loads
-      nothing from the network.
+      CSP: no remote origins. The app loads nothing from the network.
+
+      `song-audio:` must be listed in BOTH media-src and connect-src, and they
+      are not interchangeable:
+        media-src   — the <audio> element during gameplay
+        connect-src — fetch() in the Sync screen, which decodes the audio for
+                      alignment analysis
+      connect-src does NOT inherit from media-src; it falls back to default-src
+      ('self'), which blocks the scheme. Omitting it fails ONLY on the analysis
+      path, as a bare "Failed to fetch" with no CSP hint in the toast — gameplay
+      keeps working, so it looks like a broken file rather than a policy.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' song-audio:; img-src 'self' data:;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' song-audio:; connect-src 'self' song-audio:; img-src 'self' data:;"
     />
   </head>
   <body>

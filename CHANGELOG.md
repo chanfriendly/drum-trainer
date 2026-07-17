@@ -5,6 +5,51 @@ Most recent first.
 
 ---
 
+### 2026-07-16: Sync screen — alignment wired into the app
+
+The estimator existed and was tested but nothing called it. Now the Library has a
+Sync screen: Auto-align → check by ear → ±1 bar nudge → save. Verified in the
+running app against the oracle song: **confidence 4.70, offset -0.006s, tempo
+100.000%, drift 0ms** — matching the vitest oracle (-6.3ms) to within a rounding
+digit, through an entirely different path (fetch → decodeAudioData →
+OfflineAudioContext → estimator).
+
+**The design point: auto-align is a suggestion, not an answer.** `offsetMs` is
+ambiguous by whole bars, so the screen leads with the estimate, then says in
+plain text that high confidence does NOT mean the bar is right, then gives a
+preview that clicks on every charted kick/snare so the player can hear whether
+the clicks land on the drums. The ±1 bar nudge is the fix when they don't.
+`source` is `"auto"` when the machine's guess is accepted as-is and `"manual"`
+only when a human actually moved it — the two are different claims about who
+chose the bar.
+
+**`corsEnabled` — the bug this screen was built to find.** `song-audio://` had
+never served a byte to the renderer. On first use it failed with a bare
+"Failed to fetch". Two layers, both mine:
+
+1. CSP: `connect-src` does NOT inherit from `media-src`. `media-src 'self'
+   song-audio:` covers the <audio> element; `fetch()` falls back to
+   `default-src 'self'` and is blocked. Both must list the scheme.
+2. The real one: the renderer's origin is `file://`, so fetching `song-audio://`
+   is CROSS-ORIGIN, and Chromium refuses before the handler runs —
+   *"Cross origin requests are only supported for protocol schemes: chrome,
+   chrome-extension, chrome-untrusted, data, http, https"*. No response header
+   can fix that; the scheme itself must be registered with `corsEnabled: true`,
+   and then the handler must also return `Access-Control-Allow-Origin`.
+
+Worth internalising: this fails ONLY for `fetch()`. Media elements load no-cors,
+so **gameplay would have worked while analysis died**, and the visible symptom
+(a failed fetch) points at the file, not the protocol policy. Found it by
+reading the DevTools console — the main-process log showed nothing, because the
+request never reached the handler.
+
+**Also:** `SongMeta` gains `bpm` (the MIDI's first declared tempo, or null),
+used solely to size the ±1 bar nudge. Without it "one bar" is unknowable; the
+screen falls back to ±0.5s and says so. Songs imported before this default to
+null rather than undefined.
+
+---
+
 ### 2026-07-16: Practice Groove — a test song with known ground truth
 
 **Problem.** Every real audio+MIDI pair has unknown alignment, so a failure is

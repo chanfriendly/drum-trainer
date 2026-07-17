@@ -40,21 +40,63 @@ function songsRoot(): string {
 }
 
 /**
- * Must run at module scope, before `app.whenReady()`. `stream: true` is what
- * lets the response body be a stream rather than a buffered blob; `standard`
- * is what makes `new URL()` parse the host/query at all.
+ * Must run at module scope, before `app.whenReady()`.
+ *
+ * Every privilege here is load-bearing:
+ *   standard        — makes `new URL()` parse the host/query at all
+ *   secure          — treats it as a trusted origin (no mixed-content blocking)
+ *   supportFetchAPI — allows fetch() to target the scheme
+ *   stream          — lets the response body be a stream, not a buffered blob
+ *   corsEnabled     — lets the scheme participate in CORS
+ *
+ * `corsEnabled` is the non-obvious one and was found the hard way. The renderer's
+ * origin is `file://`, so fetching `song-audio://` is CROSS-ORIGIN. Without this,
+ * Chromium refuses before the handler ever runs:
+ *
+ *   "Cross origin requests are only supported for protocol schemes: chrome,
+ *    chrome-extension, chrome-untrusted, data, http, https"
+ *
+ * — and no CORS header on the response can fix it, because the scheme isn't
+ * eligible in the first place. Worse, this fails ONLY for fetch(): the <audio>
+ * element loads media no-cors, so gameplay works while alignment analysis dies
+ * with a bare "Failed to fetch". Two paths, same URL, different rules.
  */
 export function registerSongAudioScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: SCHEME,
-      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        stream: true,
+        corsEnabled: true,
+      },
     },
   ]);
 }
 
+/**
+ * CORS headers for every response.
+ *
+ * `*` is safe here: the scheme only ever serves files from this app's own
+ * userData, and only this app's renderer can address it — there is no network
+ * surface. With `corsEnabled` the browser demands the header; without it, fetch
+ * fails even on a 200.
+ */
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD",
+  "Access-Control-Allow-Headers": "Range",
+  // Range requests are useless to a client that can't read the range headers.
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+};
+
 function textResponse(status: number, message: string): Response {
-  return new Response(message, { status, headers: { "Content-Type": "text/plain" } });
+  return new Response(message, {
+    status,
+    headers: { "Content-Type": "text/plain", ...CORS_HEADERS },
+  });
 }
 
 /**
@@ -137,6 +179,7 @@ export function handleSongAudioRequests(): void {
           "Content-Length": String(size),
           // Advertise range support so the media element knows it may seek.
           "Accept-Ranges": "bytes",
+          ...CORS_HEADERS,
         },
       });
     }
@@ -145,7 +188,11 @@ export function handleSongAudioRequests(): void {
     if (!range) {
       return new Response(null, {
         status: 416,
-        headers: { "Content-Range": `bytes */${size}`, "Content-Type": contentType },
+        headers: {
+          "Content-Range": `bytes */${size}`,
+          "Content-Type": contentType,
+          ...CORS_HEADERS,
+        },
       });
     }
 
@@ -157,6 +204,7 @@ export function handleSongAudioRequests(): void {
         "Content-Length": String(end - start + 1),
         "Content-Range": `bytes ${start}-${end}/${size}`,
         "Accept-Ranges": "bytes",
+        ...CORS_HEADERS,
       },
     });
   });

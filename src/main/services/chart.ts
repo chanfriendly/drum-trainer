@@ -28,7 +28,11 @@ export function difficultyFor(notesPerSecond: number): Difficulty {
  * Notes keep their RAW GM note number — lanes are assigned at judge time via
  * the editable mapping. See CLAUDE.md → Conventions.
  */
-export function parseChart(data: Uint8Array): { chart: ChartNote[]; duration: number } {
+export function parseChart(data: Uint8Array): {
+  chart: ChartNote[];
+  duration: number;
+  bpm: number | null;
+} {
   const midi = new Midi(data);
 
   const percussionTracks = midi.tracks.filter(
@@ -49,7 +53,12 @@ export function parseChart(data: Uint8Array): { chart: ChartNote[]; duration: nu
   }
   chart.sort((a, b) => a.time - b.time);
 
-  return { chart, duration: midi.duration };
+  // The FIRST tempo only. A file may have a tempo map, but this is used for one
+  // thing — sizing the Sync screen's ±1 bar nudge — and a bar is only a useful
+  // unit where the tempo is steady anyway. Null when the file declares none.
+  const bpm = midi.header.tempos[0]?.bpm ?? null;
+
+  return { chart, duration: midi.duration, bpm };
 }
 
 /** Notes per second across the song — the difficulty input. */

@@ -35,9 +35,13 @@ replacement, and two of its comments were already found to be wrong (see
 Next work is wiring the alignment estimator into the renderer (it exists and is
 tested, but nothing calls it), then the gameplay canvas.
 
-**Untested surface worth knowing:** the `song-audio://` protocol has never
-served a byte to a real <audio> element. Its Range handling is hand-rolled and
-seeking depends on it. Gameplay is where that gets exercised.
+**Untested surface worth knowing:** `song-audio://` now serves bytes to
+`fetch()` (the Sync screen), but its hand-rolled **Range** handling still has
+never run — `decodeAudioData` fetches the whole file in one request. Seeking in
+gameplay is what will first exercise 206/Content-Range. Expect to find bugs there.
+
+**Not verified by me:** whether the preview's clicks actually sound aligned, and
+whether the synthesised kit is pleasant to drum against. Both need ears.
 
 ## What's done
 
@@ -71,6 +75,12 @@ seeking depends on it. Gameplay is where that gets exercised.
       to -6.3ms / scale 1.00000 / confidence 4.78.
 - [x] 2026-07-16 — Alignment estimator + per-song storage + 18 tests. NOT yet
       called by any UI.
+- [x] 2026-07-16 — **Sync screen done and verified in the running app**:
+      Auto-align → preview (clicks on charted kick/snare) → ±1 bar nudge → save.
+      Against the oracle song it returns confidence 4.70 / offset -0.006s /
+      tempo 100.000%, matching the vitest oracle via a completely different path.
+      Fixed `song-audio://` CORS on the way (see CHANGELOG) — the protocol had
+      never actually served a byte before this.
 - [x] 2026-07-16 — **Library screen done and verified in the running app**:
       local Tailwind UI primitives (`components/ui.tsx`), TanStack router with
       memory history, root layout with the `nav:goto` bridge. Drove the real app:
@@ -83,26 +93,20 @@ seeking depends on it. Gameplay is where that gets exercised.
 
 Prioritized. Top item is immediately actionable.
 
-1. **Wire up alignment in the renderer.** The estimator and storage exist and
-   are tested; nothing calls them yet. Needs: fetch `song-audio://` → Web Audio
-   `decodeAudioData` → `OfflineAudioContext` resample to 22050 mono →
-   `onsetEnvelope` → `estimateAlignment` → `songs.setAlignment`. Then a Sync UI
-   showing confidence with a **±1 bar nudge** and an audible preview, because
-   auto-align cannot pick the right bar on its own (see CHANGELOG).
-2. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
+1. **Port the Gameplay canvas** — audio over `song-audio://`, scrolling lanes,
    judging against `audioEl.currentTime`. Must apply `song.alignment` when
    building the playable chart, and should warn when `alignment.source ===
    "none"` rather than judging a drifting chart silently.
-3. **Port Results, Settings, Calibration.** All three are placeholder screens
+2. **Port Results, Settings, Calibration.** All three are placeholder screens
    right now (`renderer/views/placeholders.tsx`) that say what's missing.
-4. **More pure-function tests** — 18 alignment tests exist. `chart.ts`
+3. **More pure-function tests** — 18 alignment tests exist. `chart.ts`
    (parsing, difficulty) is split out to be testable without Electron but has no
    tests yet; add accuracy/score math and judgment bucketing once gameplay lands.
-5. **Add an app icon** — electron-builder warns "default Electron icon is used".
+4. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-6. **Set up ESLint** — there is deliberately no `lint` script right now rather
+5. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-7. **Hardware validation pass** — the carried-over checklist in "Notes for next
+6. **Hardware validation pass** — the carried-over checklist in "Notes for next
    session".
 
 ## What's blocked
