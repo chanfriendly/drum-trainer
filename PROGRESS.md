@@ -10,14 +10,12 @@ Verified by driving it with real MIDI over the IAC bus (a script plays the part
 of an e-kit), and the saved result's accounting is exact — every note resolved
 once, accuracy matching a hand-check of the spec formula.
 
-Library, Sync, and Gameplay are real. **Results, Settings, and Calibration are
-still placeholders** (`renderer/views/placeholders.tsx`) that state what's
-missing — a half-built app should never be mistakable for a broken one.
+Library, Sync, Gameplay, Settings, and Results are real. **Calibration is the
+only placeholder left.**
 
-Note Settings being a placeholder means **the MIDI device can only be chosen by
-writing localStorage by hand** (`drumTrainer.settings`, key
-`selectedDeviceIndex`). That is the main thing standing between this and a real
-practice session.
+**The app is ready for a real kit.** Settings has the device picker, so nothing
+needs hand-editing any more. `npm run midi-sim` plays the part of a kit for
+everything except feel.
 
 Two risks retired, both by measurement rather than inspection:
 - The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
@@ -78,6 +76,13 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
       to -6.3ms / scale 1.00000 / confidence 4.78.
 - [x] 2026-07-16 — Alignment estimator + per-song storage + 18 tests. NOT yet
       called by any UI.
+- [x] 2026-07-17 — **Settings + Results done and verified in the running app.**
+      Settings: device picker, live input monitor, mapping with Learn, hit
+      windows, latency offset. Learn captured note 39 (Hand Clap) onto Snare via
+      the harness and persisted across a remount. Results: real saved run renders
+      correctly (3,004 / 7.2% / 20x / 316) with per-drum bars.
+- [x] 2026-07-17 — **`scripts/midi-sim.mjs` committed** — plays the part of an
+      e-kit over the IAC bus (`burst`/`note`/`chart`/`devices`). `npm run midi-sim`.
 - [x] 2026-07-16 — **Gameplay done and verified with REAL MIDI**: canvas lanes,
       scrolling notes, judging against the audio clock, pause/resume, results
       saved. Drove it via an IAC-bus sender standing in for an e-kit — score hit
@@ -102,21 +107,18 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
 
 Prioritized. Top item is immediately actionable.
 
-1. **Port Settings** — the device picker is the blocker for real play (see
-   Current status). Also the note→drum mapping with per-drum Learn, hit windows,
-   and the latency offset.
-2. **Port Results** — per-song history, newest first. Data is already being
-   saved correctly; nothing reads it yet.
-3. **Port Calibration** — tap along to a metronome to derive `latencyOffsetMs`.
-   That offset is HARDWARE lag only; song alignment is separate and done.
-4. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
+1. **Port Calibration** — tap along to a metronome to derive `latencyOffsetMs`.
+   The last placeholder. That offset is HARDWARE lag only; song alignment is
+   separate and done. Testable with `npm run midi-sim burst`, though the derived
+   number is only meaningful from real taps.
+2. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
    (parsing, difficulty) is split out to be testable without Electron but still
    has none.
-5. **Add an app icon** — electron-builder warns "default Electron icon is used".
+3. **Add an app icon** — electron-builder warns "default Electron icon is used".
    `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-6. **Set up ESLint** — there is deliberately no `lint` script right now rather
+4. **Set up ESLint** — there is deliberately no `lint` script right now rather
    than a broken one. Flat config + typescript-eslint when it's worth the time.
-7. **Hardware validation pass** — the carried-over checklist in "Notes for next
+5. **Hardware validation pass** — the carried-over checklist in "Notes for next
    session".
 
 ## What's blocked
@@ -208,8 +210,8 @@ marked; the rest are open):
   a sane offset; judgments feel right *by ear*
 - More than one MIDI device connected — picker lists all; switching works
 - Unplug/replug the kit while running — no crash, no silent stop
-- MIDI with notes outside the default GM mapping — ignored cleanly, mappable
-  via "Learn" without re-import
+- ~~MIDI with notes outside the default GM mapping — ignored cleanly, mappable
+  via "Learn" without re-import~~ — **done 2026-07-17** (note 39 → Snare)
 - Mismatched pair (MIDI longer than audio) — chart outlasting audio must not
   break gameplay
 - Corrupt/non-MIDI and corrupt/unsupported audio — clear error, not a crash
@@ -219,7 +221,9 @@ marked; the rest are open):
 - Hand-check combo/score against the documented formulas
 - Canvas at 900×640 through full-screen — lanes scale, don't clip
 - Hit-window and latency changes take effect without a restart
-- Mapping persists across restarts (`localStorage: drumTrainer.settings`)
+- ~~Mapping persists across restarts (`localStorage: drumTrainer.settings`)~~ —
+  **done 2026-07-17** (verified across a remount; a full app restart is still
+  worth one check)
 
 **Nice-to-haves, only if asked:** keyboard fallback for testing without a kit
 (would meaningfully unblock solo development — worth raising with the user);

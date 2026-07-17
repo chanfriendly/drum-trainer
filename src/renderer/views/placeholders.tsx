@@ -7,7 +7,7 @@
  * rendering a blank panel, so a half-built app is never mistaken for a broken one.
  */
 
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "lucide-react";
 
 import { Button } from "../components/ui.js";
@@ -28,25 +28,6 @@ function Placeholder({ title, detail }: { title: string; detail: string }) {
         <p className="max-w-md text-sm text-text-muted">{detail}</p>
       </div>
     </div>
-  );
-}
-
-export function ResultsView() {
-  const { songId } = useParams({ from: "/results/$songId" });
-  return (
-    <Placeholder
-      title="Results"
-      detail={`Song ${songId}. Per-song history, newest first: accuracy, per-drum breakdown, max combo, score.`}
-    />
-  );
-}
-
-export function SettingsView() {
-  return (
-    <Placeholder
-      title="Settings"
-      detail="MIDI device picker, the note→drum mapping with per-drum Learn capture, hit windows, and the latency offset."
-    />
   );
 }
 

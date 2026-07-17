@@ -20,7 +20,9 @@ import { RootView } from "./views/root-view.js";
 import { LibraryView } from "./views/library-view.js";
 import { SyncView } from "./views/sync-view.js";
 import { GameplayView } from "./views/gameplay-view.js";
-import { CalibrationView, ResultsView, SettingsView } from "./views/placeholders.js";
+import { SettingsView } from "./views/settings-view.js";
+import { ResultsView } from "./views/results-view.js";
+import { CalibrationView } from "./views/placeholders.js";
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootView,

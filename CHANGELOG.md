@@ -5,6 +5,48 @@ Most recent first.
 
 ---
 
+### 2026-07-17: Settings, Results, and a committed MIDI harness
+
+**`scripts/midi-sim.mjs` — the kit simulator.** The IAC bus cuts both ways: the
+same virtual cable the app listens on can be written to. This plays the part of
+an e-kit (`burst`, `note <n>`, `chart <file>`, `devices`), so nearly everything
+can be exercised with no hardware in the room. It was a throwaway in a scratch
+dir; it earned promotion the moment it produced the first real score.
+
+What it does NOT cover, and the docs say so: timing *feel*, velocity curves,
+hi-hat pedal CC, double-triggering, unplug/replug. Note times are wall-clock from
+launch with no way to sync to the app's audio clock, so expect Early/Late rather
+than Perfect — that's the harness's imprecision, not the judge's.
+
+**Settings** — the screen that made the app usable at all. Until now the MIDI
+device could only be chosen by hand-writing localStorage from the DevTools
+console. It has the device picker, the note→drum mapping with per-drum Learn,
+hit windows, and the latency offset.
+
+*The input monitor is an addition, and earns its place.* When a kit doesn't work
+the questions are always "is anything arriving?" and "what note is this pad?".
+Without it the answer is a silent screen and the player can't tell a dead cable
+from a wrong mapping. Verified: sending note 38 shows
+`note 38 velocity 100 → Snare`, live.
+
+*Learn verified end to end, on the case that motivated it:* armed Learn on Snare,
+sent note **39 (Hand Clap)** — the exact note the Queen chart has 75 of and the
+default GM mapping ignores — and it mapped, persisted through a remount, and now
+reads `37, 38, 39, 40`. That closes the carried-over checklist item "MIDI with
+notes outside the default GM mapping — mappable via Learn without re-import".
+
+**Results** — per-song history, newest first. Read-only; gameplay already wrote
+the data and nothing read it. The per-drum breakdown is the point: one accuracy
+number says you did badly, the breakdown says it was the ride. Verified against
+the real saved run — 3,004 / 7.2% / 20x / 316 notes, and per-drum bars showing
+Hi-Hat 29/128 but Tom 0/17, Crash 0/5, Ride 0/56 (the blind sender never hit the
+sparse lanes). Lanes a chart never uses are omitted rather than shown as 0/0
+failures.
+
+Calibration is now the only placeholder left.
+
+---
+
 ### 2026-07-16: Gameplay — canvas, judging, and the first real MIDI hits
 
 The core loop works end-to-end: **import → sync → play → judge → save → results**.
