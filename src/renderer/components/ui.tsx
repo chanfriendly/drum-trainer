@@ -8,7 +8,7 @@
  * The gameplay canvas uses NONE of this — it's a raw <canvas> on rAF.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { InfoIcon, XIcon } from "lucide-react";
 
@@ -251,10 +251,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
   }, []);
 
-  const api = {
-    success: useCallback((m: string) => push(m, "success"), [push]),
-    error: useCallback((m: string) => push(m, "error"), [push]),
-  };
+  // MUST be memoized. This object is the context value; if it's a fresh object
+  // each render, every consumer's `toast` identity changes whenever ANY toast is
+  // added, re-running their effects. An effect that shows a toast on failure
+  // then loops: toast → provider re-renders → new context value → effect
+  // re-runs → toast → … (observed as an infinite flood of identical error
+  // toasts when a MIDI device failed to open during gameplay).
+  const api = useMemo(
+    () => ({
+      success: (m: string) => push(m, "success"),
+      error: (m: string) => push(m, "error"),
+    }),
+    [push],
+  );
 
   return (
     <ToastContext.Provider value={api}>
