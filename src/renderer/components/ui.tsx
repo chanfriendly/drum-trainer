@@ -242,13 +242,37 @@ const ToastContext = createContext<{
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Messages currently on screen, so an identical one is never stacked.
+  const showing = useRef(new Set<string>());
+
   const push = useCallback((message: string, tone: Toast["tone"]) => {
+    // DEDUPE. A toast layer must never stack the same message repeatedly: if
+    // something upstream retries in a loop, the screen fills and the app becomes
+    // unusable. This happened for real — a MIDI device that failed to open
+    // produced dozens of identical toasts in seconds, burying the UI.
+    //
+    // Memoizing the context value (below) removed one cause of that loop, but a
+    // dedupe is the layer that makes it structurally impossible regardless of
+    // which caller misbehaves. Defence belongs here, not only at each call site.
+    const key = `${tone}|${message}`;
+    if (showing.current.has(key)) return;
+    showing.current.add(key);
+
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, message, tone }]);
     // Errors linger: an import failure explains WHY it failed and the player
     // needs time to read it. Successes are just acknowledgement.
     const ttl = tone === "error" ? 8000 : 3000;
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
+    setTimeout(() => {
+      showing.current.delete(key);
+      setToasts((t) => t.filter((x) => x.id !== id));
+    }, ttl);
+  }, []);
+
+  /** Dismissing must free the key, or that message could never be shown again. */
+  const dismiss = useCallback((toast: Toast) => {
+    showing.current.delete(`${toast.tone}|${toast.message}`);
+    setToasts((t) => t.filter((x) => x.id !== toast.id));
   }, []);
 
   // MUST be memoized. This object is the context value; if it's a fresh object
@@ -281,7 +305,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           >
             <span className="flex-1 whitespace-pre-wrap">{t.message}</span>
             <button
-              onClick={() => setToasts((list) => list.filter((x) => x.id !== t.id))}
+              onClick={() => dismiss(t)}
               className="text-text-muted hover:text-text-primary"
               aria-label="Dismiss"
             >

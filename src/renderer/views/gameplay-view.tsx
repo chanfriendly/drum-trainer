@@ -223,8 +223,12 @@ function GameplayCanvas({ song }: { song: SongWithChart }) {
       toast.error("No MIDI device selected — pick your kit in Settings. Nothing will be judged.");
       return;
     }
+    // One attempt, one message. Retrying a device that isn't there just floods
+    // the screen; the player needs to leave and fix it in Settings either way.
     window.drumTrainer.midi.openDevice(selectedDeviceIndex).catch(() => {
-      toast.error("Could not open the MIDI device. Is the kit still connected?");
+      toast.error(
+        "Couldn't open your MIDI device — it may have been unplugged. Nothing will be judged. Check it in Settings.",
+      );
     });
     return () => {
       void window.drumTrainer.midi.closeDevice().catch(() => undefined);

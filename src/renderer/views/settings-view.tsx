@@ -41,16 +41,31 @@ export function SettingsView() {
     saveSettings(next);
   }, []);
 
+  /**
+   * Is the saved device actually present right now? A kit that has been
+   * unplugged leaves its index in localStorage, and the list comes back empty.
+   */
+  const devices = devicesQuery.data;
+  const savedDeviceMissing =
+    settings.selectedDeviceIndex !== null &&
+    devices !== undefined &&
+    !devices.some((d) => d.index === settings.selectedDeviceIndex);
+
   // Open the selected device on arrival so the monitor and Learn actually
   // receive anything. Deliberately NOT closed on unmount: gameplay reopens it,
   // quit cleans it up, and closing here would make Learn work only while the
   // screen is mounted for reasons a reader would have to guess at.
+  //
+  // Only attempt when the device is genuinely in the list. Opening a stale index
+  // throws every time, and a failure that repeats is a failure worth preventing
+  // rather than reporting — the unplugged-kit case is exactly this.
   useEffect(() => {
     if (settings.selectedDeviceIndex === null) return;
+    if (devices === undefined || savedDeviceMissing) return;
     window.drumTrainer.midi.openDevice(settings.selectedDeviceIndex).catch(() => {
       toast.error("Could not open that MIDI device. Is it still connected?");
     });
-  }, [settings.selectedDeviceIndex, toast]);
+  }, [settings.selectedDeviceIndex, devices, savedDeviceMissing, toast]);
 
   // Live input monitor + Learn capture share one subscription.
   useEffect(() => {
@@ -104,6 +119,17 @@ export function SettingsView() {
             title="MIDI input"
             description="Your electronic kit. Nothing is judged until a device is selected."
           >
+            {savedDeviceMissing && (
+              // Inline, not a toast: this is a persistent state, and a toast
+              // that must be re-shown is a toast that gets shown in a loop.
+              <p className="mb-3 rounded-lg border border-drum-crash/40 bg-drum-crash/10 p-3 text-xs text-text-muted">
+                <span className="font-medium text-drum-crash">
+                  Your saved MIDI device isn&apos;t connected.
+                </span>{" "}
+                Plug the kit back in and press Refresh, or pick another device below. Nothing will
+                be judged until one is selected.
+              </p>
+            )}
             {devicesQuery.isLoading ? (
               <p className="text-sm text-text-muted">Looking for devices…</p>
             ) : devicesQuery.data?.length === 0 ? (

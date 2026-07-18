@@ -227,6 +227,53 @@ def evaluate(reference, candidate, tol):
     return report, confusion
 
 
+def onset_envelope(audio):
+    """Standardized spectral-flux envelope, for alignment search."""
+    mag, fps = stft_mag(audio)
+    flux = np.maximum(np.diff(np.log1p(mag), axis=0), 0).sum(axis=1)
+    flux = np.concatenate([[0], flux])
+    flux = (flux - flux.mean()) / (flux.std() + 1e-9)
+    return flux, fps
+
+
+def auto_align(reference, audio, beat_notes=(35, 36, 38, 40)):
+    """Find (offset, tempo_scale) mapping reference chart time onto this audio.
+
+    Mirrors the app's estimator: mean envelope strength where notes land, coarse
+    2D sweep then a fine refine. Reported score is in stdevs — near 0 means the
+    chart landed on noise (no lock), >1 is a confident lock.
+
+    Aligning against an ISOLATED DRUM STEM should score far higher than against a
+    full mix, because nothing but drums produces the onsets.
+    """
+    flux, fps = onset_envelope(audio)
+    beat = np.array([t for t, d in reference if d in ("kick", "snare")])
+    times = beat if len(beat) >= 20 else np.array([t for t, _ in reference])
+    if len(times) == 0:
+        return 0.0, 1.0, 0.0
+
+    def score_at(scale, off):
+        idx = ((times * scale + off) * fps).astype(int) - FRAME_LEAD
+        idx = idx[(idx >= 0) & (idx < len(flux))]
+        if len(idx) < len(times) * 0.5:
+            return -np.inf
+        return flux[idx].mean()
+
+    best = (-np.inf, 0.0, 1.0)
+    for scale in np.arange(0.96, 1.041, 0.002):
+        for off in np.arange(-8.0, 20.0, 4.0 / fps):
+            v = score_at(scale, off)
+            if v > best[0]:
+                best = (v, off, scale)
+    _, off0, sc0 = best
+    for scale in np.arange(sc0 - 0.002, sc0 + 0.0021, 0.0004):
+        for off in np.arange(off0 - 4.0 / fps, off0 + 4.0 / fps, 1.0 / (fps * 4)):
+            v = score_at(scale, off)
+            if v > best[0]:
+                best = (v, off, scale)
+    return best[1], best[2], best[0]
+
+
 def load_notes(path):
     with open(path) as f:
         payload = json.load(f)
@@ -251,6 +298,8 @@ def main():
     ap.add_argument("--candidate", help="notes.json; omit to use the baseline transcriber")
     ap.add_argument("--offset-ms", type=float, default=0.0)
     ap.add_argument("--tempo-scale", type=float, default=1.0)
+    ap.add_argument("--auto-align", action="store_true",
+                    help="find offset/tempo-scale against this audio instead of trusting a stored value")
     ap.add_argument("--confounded", action="store_true",
                     help="mark output as unreliable: alignment is not known exactly")
     ap.add_argument("--plot", help="write a timing-error histogram PNG")
@@ -265,6 +314,15 @@ def main():
 
     audio = load_audio(args.audio)
     print(f"audio      {len(audio) / SR:7.2f}s   {args.audio.split('/')[-1]}")
+
+    if args.auto_align:
+        off, sc, lock = auto_align(reference, audio)
+        args.offset_ms, args.tempo_scale = off * 1000, sc
+        # The earlier transform ran with the defaults (scale 1, offset 0), i.e.
+        # identity, so applying the discovered mapping here is correct.
+        reference = [(t * sc + off, d) for t, d in reference]
+        print(f"auto-align offset {off:+.3f}s  scale {sc:.5f}  lock {lock:.2f} "
+              f"({'confident' if lock > 1 else 'WEAK — read results with suspicion'})")
     print(f"reference  {len(reference):5d} notes  (mapped to lanes)")
     if args.offset_ms or args.tempo_scale != 1.0:
         print(f"alignment  offset {args.offset_ms:+.1f}ms  scale {args.tempo_scale:.5f}")

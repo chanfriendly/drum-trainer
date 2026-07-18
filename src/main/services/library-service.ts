@@ -23,7 +23,7 @@ import type {
 } from "../../shared/types.js";
 import { NO_ALIGNMENT } from "../../shared/types.js";
 import { logger } from "../logger.js";
-import { difficultyFor, notesPerSecond, parseChart } from "./chart.js";
+import { chartShape, difficultyFor, looksHarmonic, notesPerSecond, parseChart } from "./chart.js";
 
 /**
  * `app.getPath` is SYNCHRONOUS in Electron — the Glaze sources awaited it, and
@@ -64,9 +64,28 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
     );
   }
 
-  const { chart, duration, bpm } = parsed;
+  const { chart, duration, bpm, usedPercussionTracks } = parsed;
   if (chart.length === 0) {
     throw new Error("No drum notes found in that MIDI file. Pick one that contains a drum track.");
+  }
+
+  // Refuse chord/melody exports before they become a "song" that plays as
+  // nonsense. See looksHarmonic() for why this is worth a hard stop: the
+  // failure mode presents as broken judging, not as a bad file.
+  const shape = chartShape(chart);
+  if (looksHarmonic(shape, usedPercussionTracks)) {
+    logger.warn("library", "Rejected harmonic MIDI as a drum chart", {
+      midiPath: path.basename(midiPath),
+      chordRatio: shape.chordRatio,
+      medianGapSec: shape.medianGapSec,
+    });
+    throw new Error(
+      `"${path.basename(midiPath)}" looks like a chord or melody track, not a drum chart. ` +
+        `${Math.round(shape.chordRatio * 100)}% of its notes are struck in chords, ` +
+        `about ${shape.medianGapSec.toFixed(1)}s apart, and it has no drum (percussion) track.\n\n` +
+        `Audio-to-MIDI services export chords, bass and vocals — not drums. ` +
+        `Look for a MIDI with a real drum track, or export one from a drum score.`,
+    );
   }
 
   // Fail before writing if the audio is unreadable.
