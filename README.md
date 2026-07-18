@@ -84,16 +84,29 @@ the MIDI is a flat 110.000 bpm while the record sags to ~109.68 — the chart wa
 **600ms** out of sync by the end, enough that **64% of the song would auto-miss**
 no matter how well you play. Sync fixes both the starting point and the drift.
 
-1. **Auto-align** — a first guess.
+1. **Auto-align.** It analyses the audio and shows a **ranked list of candidate
+   alignments** — the estimate plus the beat- and bar-shifted alternatives, each
+   with a fit score. It tells you which case you're in:
+   - **"One clear winner"** — the top option fits clearly better. Still preview it.
+   - **"Too close to call"** — several fit almost equally well. This is the
+     honest answer, not a failure; your ear decides.
 2. **Preview** — plays 12s with a click on every charted kick and snare.
    - Clicks land *on* the drums → aligned. Save.
-   - Clicks sit consistently *between* the drums → **±1 bar** and preview again.
+   - Clicks sit consistently *between* them → pick a different candidate from the
+     list (or nudge ±1 bar / ±10ms) and preview again.
 3. **Save alignment.**
 
-**The bar nudge is not optional polish.** Auto-align genuinely cannot tell which
-bar is right — every bar of a groove looks identical to it. High confidence means
-"found the groove", not "found the right bar". Your ears are the only thing that
-can settle it.
+**Why you're asked at all.** Auto-align places the chart to within a few
+milliseconds — far better than an ear. What it *cannot* do is tell which **beat**
+of a repeating groove is the right one, because every bar looks alike to it. So
+the milliseconds are the machine's job and the beat is yours, and that's the only
+question the preview is really asking. A high fit score means "found the groove",
+not "found the right beat".
+
+**If it warns the recording "doesn't hold one tempo",** that song breathes —
+parts of it drift further than a Perfect window even at the best fit. Expect the
+middle to judge Early/Late. Fixing it properly means conforming the MIDI to the
+recording in a DAW (Logic's Smart Tempo) and re-importing.
 
 ### 5. Play
 
@@ -106,7 +119,7 @@ cross it. Results save automatically.
 | --- | --- |
 | Everything reads Early or Late, consistently | Latency offset. Re-calibrate, or nudge it in Settings. |
 | Notes don't match what you hear at all | The song isn't synced, or is synced a bar off. |
-| Fine at first, drifts off later | Tempo mismatch — re-run Sync; auto-align sets the tempo scale. |
+| Fine at first, drifts off later | Tempo mismatch — re-run Sync; auto-align sets the tempo scale, and warns if the recording won't hold one. |
 | A pad does nothing | Unmapped. Settings → Input monitor → Learn. |
 | Everything misses regardless | No MIDI device selected, or the wrong one. |
 
@@ -119,7 +132,7 @@ The rule of thumb: **consistent** error is settings, **growing** error is sync.
 ```bash
 npm install
 npm run dev          # run it
-npm run test         # 53 tests — the pure logic (alignment, judging, calibration)
+npm run test         # 65 tests — the pure logic (alignment, judging, calibration)
 npm run type-check
 npm run dist:mac     # unsigned .dmg into release/
 ```

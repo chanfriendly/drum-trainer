@@ -88,7 +88,7 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
       Verified in the app with a machine tapper: ±4ms consistency, "Tight and
       consistent", save path confirmed. Median (not mean) + MAD spread, settling
       taps discarded, scattered runs refused rather than fabricating an offset.
-      53 tests.
+      53 tests (65 as of the candidate-ranking work).
 - [x] 2026-07-17 — **Transcription eval harness** (`scripts/eval/`). Findings:
       timing is NOT the bottleneck (±25ms F1 51.3% vs ±50ms 51.6% on the oracle —
       a 0.3pt gap); classification is (ride 3.5%, snare 0%). On the real mix it
