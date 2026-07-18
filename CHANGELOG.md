@@ -5,6 +5,64 @@ Most recent first.
 
 ---
 
+### 2026-07-18: Played on a real kit; chord-file imports; the transcription verdict
+
+**The premise is validated.** The user connected their e-kit and played a song
+through successfully. Everything before this was inference from a MIDI simulator;
+this is the first time the app did the thing it exists to do.
+
+**Published**: github.com/chanfriendly/drum-trainer, public, MIT. Verified before
+pushing that no third-party audio or MIDI is in the repo *or its history* — only
+practice-groove, which we generate.
+
+**The "Fadr transcribes drums badly" report was a misdiagnosis, and the truth was
+worse.** Fadr never attempted drum transcription. Its MIDI export is *pitch*
+transcription — chords, bass, vocals — because pitch is what it detects; drums
+are unpitched, so no drum track is produced at all. Parsing the files:
+
+| Fadr output | notes | percussion? | what it is |
+| --- | --- | --- | --- |
+| `midi.mid` | 294 | no | chords (A♭/D♭/E♭ triads) |
+| `midi-bass.mid` | 277 | no | bass |
+| `midi-other.mid` | 580 | no | other pitched |
+| `midi-vocals.mid` | 396 | no | vocals |
+
+**Three of the five songs in the user's library were chord exports imported as
+drum charts.** Every event was exactly three simultaneous notes, 1.7–2.5s apart.
+The symptom was never "wrong notes" — it was gameplay feeling broken and Sync
+reporting near-zero confidence (0.05–0.08), which reads as an app bug. The
+estimator had been correct the whole time: a chord progression genuinely does not
+align to drum hits. Import now rejects harmonic files (`looksHarmonic` in
+`chart.ts`), requiring three signals to agree so a genuine chart is never blocked.
+
+**The transcription measurement, on real separated audio.** Ground truth: the
+user's real 1,944-note Taylor Swift drum chart. Audio: a Fadr-isolated drum stem.
+
+1. *Isolated stems are a big win for ALIGNMENT.* Lock **3.04** against the stem
+   vs **0.65** against the full mix, same tempo scale recovered. Added
+   `--auto-align` to the harness to measure this.
+2. *The baseline transcriber is dead.* **8.7% F1** — against 51% on the synthetic
+   oracle. It predicted 393 crashes where 29 exist and 168 rides where there are
+   none: real drum audio has high-frequency energy everywhere (ringing cymbals,
+   bleed, separation artifacts), so a `high-frequency ⇒ cymbal` rule fires on
+   nearly every onset. The harness's own "optimistic upper bound" warning came
+   true, hard.
+
+Conclusion: band-energy classification is *structurally* wrong. The plan is to
+stop classifying — split a drum stem into per-instrument stems and run onset
+detection on each, since onset timing is the part already measured at 99.3%
+within ±25ms. Written up in `scripts/eval/README.md`.
+
+**Toast flood fixed properly.** A MIDI device that fails to open produced dozens
+of identical toasts. Memoizing the context value earlier removed one cause but
+not the behaviour — I was wrong to call it fixed. Now handled at two layers: the
+toast system refuses to stack an identical message, and Settings does not attempt
+to open a device that isn't in the device list, showing a persistent inline
+banner instead. A persistent condition deserves persistent UI; a toast that must
+be re-shown is a toast that gets shown in a loop. This is the unplugged-kit case.
+
+---
+
 ### 2026-07-17: Ranked alignment candidates — the way out of the bar ambiguity
 
 Auto-align used to hand back one answer it couldn't defend, and the UI told the

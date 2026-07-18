@@ -105,6 +105,88 @@ false positives once other instruments are in the mix.** Source separation
 (Demucs) before transcription would attack exactly the failure the Queen run
 exposes. That's the experiment this harness now makes cheap to run.
 
+## Findings on REAL audio (2026-07-18) — these supersede the synthetic ones
+
+The numbers above are from **synthetic** isolated drums. On real audio they do
+not hold, and the gap is the single most important thing in this document.
+
+Measured on **Taylor Swift – Red**: a genuine 1,944-note drum chart (ground
+truth) against a **Fadr-separated isolated drum stem**.
+
+```bash
+python3 scripts/eval/transcribe_eval.py \
+  --audio "Drums - Taylor Swift - Red (Lyrics).mp3" \
+  --reference ts-ref.json --auto-align
+```
+
+### 1. Isolated stems are a large win — for ALIGNMENT
+
+| Aligned against | Lock | Offset | Tempo scale |
+| --- | --- | --- | --- |
+| Full mix | **0.65** (weak) | −1.969s | 0.984 |
+| Isolated drum stem | **3.04** (confident) | −1.501s | 0.984 |
+
+Same tempo recovered, **4.7× the lock strength**, and the offsets differ by half
+a second — the full-mix answer was drifting on non-drum onsets. Letting Sync
+analyse a drum stem instead of the mix is cheap and clearly worth doing.
+
+(`--auto-align` was added for this: it finds offset/tempo itself rather than
+trusting a stored value, and reports the lock so a weak result announces itself.)
+
+### 2. The baseline transcriber is not viable — and fails in one specific way
+
+| | ±25ms | ±50ms |
+| --- | --- | --- |
+| Overall F1 | **8.7%** | 14.4% |
+
+Against 51% on the synthetic oracle. The confusion matrix says why:
+
+- kick → **crash ×122**, ride ×50, *kick ×12*
+- snare → crash ×85, ride ×29, **snare ×1**
+- predicted **393 crashes** where 29 exist; **168 rides where there are none**
+
+It calls almost everything a cymbal. Real drum audio — ringing cymbals, overhead
+bleed, mp3 and separation artifacts — has high-frequency energy everywhere, so a
+`high-frequency ⇒ cymbal` rule fires on nearly every onset. The synthetic oracle
+had clean isolated hits and never exposed this.
+
+Timing held up far better than classification, as always: 60% of matches inside
+±25ms, mean error +13ms.
+
+**Conclusion: hand-tuned band-energy classification is structurally wrong, not
+under-tuned.** Do not try to fix it by moving thresholds.
+
+## The plan: stop classifying, separate instead
+
+Classification is the broken half; onset detection is the solved half. So remove
+the need to classify:
+
+```
+song → drum stem (Fadr/Demucs — already works)
+     → per-instrument stems (kick / snare / toms / hats / cymbals)
+     → onset detection on EACH stem   ← the part measured at 99.3% within ±25ms
+     → .mid
+```
+
+Each lane becomes its own onset-detection problem, which is the thing that
+already works. Demucs-derived models exist for drum sub-separation.
+
+**Constraints that shape this:**
+
+- It needs PyTorch and model weights (GBs), so it is an **offline script**, not
+  app code. It emits a `.mid` the user imports normally — the app's "MIDI only,
+  never infer from audio" rule is not being relaxed.
+- The user has a Jetson Orin, which is a better host than the laptop.
+- **Expect kick and snare to get good; cymbal articulation (crash vs ride vs open
+  hat) to stay hard.** Consider shipping graceful degradation: a 3-lane chart
+  (kick / snare / everything-else) that is 85% right is better practice material
+  than a 6-lane chart that is 40% right.
+
+**Measure before believing.** This harness exists for exactly that, and it has
+now twice contradicted an assumption that felt safe. Run any new pipeline
+against BOTH practice-groove (clean, known truth) and the Taylor Swift stem
+(real, ground truth), and report both — the gap between them is the finding.
+
 ## Where sheet music fits
 
 Digital scores (MusicXML, Guitar Pro, MuseScore) export to MIDI directly, so

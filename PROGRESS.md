@@ -1,51 +1,45 @@
 # Progress
 
 > Read this before doing anything else. Update it before you stop.
-> Last updated: 2026-07-16
+> Last updated: 2026-07-18
 
 ## Current status
 
-**The core loop works in the real app: import → sync → play → judge → save.**
-Verified by driving it with real MIDI over the IAC bus (a script plays the part
-of an e-kit), and the saved result's accounting is exact — every note resolved
-once, accuracy matching a hand-check of the spec formula.
+**The app is finished, published, and has been played on a real kit.** That last
+part is the one thing no amount of local testing could establish, and it is now
+done: the user played a song through with their e-kit and it worked.
 
-**All five screens are real** — plus Sync, which the spec didn't anticipate.
-There are no placeholders left.
+- Repo: **https://github.com/chanfriendly/drum-trainer** (public, MIT).
+- All five spec'd screens exist, plus **Sync**, which the spec did not anticipate
+  but the problem demanded. No placeholders.
+- 74 tests. Type-clean. Packages to an installable `.dmg` with an icon.
+- Measured end-to-end MIDI jitter: **±4ms**, comfortably inside the ±25ms Perfect
+  window. The plumbing is precise enough to judge drumming.
 
-**The app is ready for a real kit.** See README.md for the getting-started flow.
-`npm run midi-sim` plays the part of a kit for everything except feel.
+**The active workstream is no longer the app — it is getting playable songs into
+it.** A song needs a real drum MIDI, and free drum MIDI/sheet music is scarce
+enough that it is the practical limit on what can be played. See
+`scripts/eval/README.md` for the measurements and the plan.
 
-Measured end-to-end MIDI jitter is **±4ms** (Calibration, machine-tapped at exact
-600ms intervals) — well inside the ±25ms Perfect window. The plumbing is precise
-enough to judge drumming; that was an open question until 2026-07-17.
+### Read this before touching timing or imports
 
-Two risks retired, both by measurement rather than inspection:
-- The packaged app enumerates MIDI devices from inside `app.asar.unpacked`
-  without error, verified by launching the actual `.dmg`. `IAC Driver Bus 1`
-  now enumerates (the user enabled it 2026-07-16), so real device detection
-  works — receiving note-ons from it is still untested.
-- **The chart/audio alignment problem is found and solved in principle**
-  (estimator + storage + tests), though nothing calls it yet. Read the
-  CHANGELOG entry before touching timing — the spec's one-global-offset model
-  is wrong for real file pairs and would have made ~64% of the first test song
-  auto-Miss while looking like a judging bug.
+Three findings cost real debugging time and are easy to re-derive the hard way:
 
-The reference implementation — the prior Glaze build — is at
-`~/Library/Application Support/app.glaze.macos.main/apps/drum-trainer-local-2qhmrebi/.glaze-sources`.
-Read it, don't copy it blindly: every `@glaze/core` import needs a real Electron
-replacement, and two of its comments were already found to be wrong (see
-"Failed approaches").
+1. **A chart and a recording rarely share a clock.** The spec's single global
+   offset is wrong for real file pairs. Per-song `alignment` (offset + tempo
+   scale) exists for this; `settings.latencyOffsetMs` is HARDWARE lag and is a
+   different thing. Never merge them.
+2. **Audio-to-MIDI services export chords, not drums.** Fadr and friends
+   transcribe *pitch*, so their `.mid` files contain chords/bass/vocals and no
+   drum track at all. Three of the first five real imports were chord exports.
+   Import now rejects them; the detector is `looksHarmonic` in `chart.ts`.
+3. **A tight stdev around a non-zero mean is a systematic bug, not noise.** This
+   caught a ~35ms FFT framing bias (`FRAME_LEAD`) that would have made every song
+   judge early. Read the spread, not the average.
 
-Next work is wiring the alignment estimator into the renderer (it exists and is
-tested, but nothing calls it), then the gameplay canvas.
-
-**`song-audio://` is now fully exercised**: fetch (Sync), media playback, and
-Range/206 seeking (verified by seeking to 58s mid-song).
-
-**Not verified by me, and not verifiable from here:** whether a Perfect *feels*
-like a Perfect, whether the Sync preview's clicks sound aligned, and whether the
-synthesised kit is pleasant to drum against. All three need the kit and ears.
+**Still not verified, and not verifiable without the kit:** whether the Sync
+preview's clicks sound aligned to a human ear, and whether the synthesised
+practice-groove kit is pleasant to drum against.
 
 ## What's done
 
@@ -115,79 +109,89 @@ synthesised kit is pleasant to drum against. All three need the kit and ears.
       song row (name/difficulty/duration/notes/best, plus a "Not synced" badge)
       → delete confirm + cancel → Settings nav → ⌘, menu bridge. Confirmed
       `songs/<id>/` on disk holds audio.flac + song.json with all 316 notes.
+- [x] 2026-07-17 — **Played on a real kit.** The user connected their e-kit and
+      played a song successfully. The core premise is validated.
+- [x] 2026-07-18 — **Published**: github.com/chanfriendly/drum-trainer, public,
+      MIT, 17 commits. No copyrighted media in the repo or its history.
+- [x] 2026-07-18 — **Diagnosed the "bad transcription" report**: three of five
+      imported songs were Fadr CHORD exports, not drum charts. Import now
+      rejects them (`looksHarmonic`), verified against the real files.
+- [x] 2026-07-18 — **Measured transcription on real separated drums**: 8.7% F1,
+      and aligning to a drum stem beats the full mix 3.04 vs 0.65 lock. See
+      `scripts/eval/README.md`.
+- [x] 2026-07-18 — Fixed the MIDI-device toast flood at two layers (toast dedupe
+      + don't open a device that isn't listed). This was the unplugged-kit case.
+
 
 ## What's next
 
-Prioritized. Top item is immediately actionable.
+Prioritised. The top item is the real project now.
 
-1. **Port Calibration** — the last placeholder, and the last gap before a real
-   practice session: without it `latencyOffsetMs` starts at 0 and must be typed
-   in by hand in Settings. Tap along to a metronome to derive it.
-   That offset is HARDWARE lag only; song alignment is separate and done.
-   Testable with `npm run midi-sim burst`, though the derived number is only
-   meaningful from real taps.
-2. **More pure-function tests** — 35 exist (alignment + judging). `chart.ts`
-   (parsing, difficulty) is split out to be testable without Electron but still
-   has none.
-4. **DTW is probably NOT worth building.** It was the plan for the ~82ms bow the
-   linear model leaves on drifty recordings, but Logic's Smart Tempo already
-   does nonlinear tempo mapping with a human in the loop, and the user owns
-   Logic. The app now DETECTS the problem (`analyzeAlignment().breathes`) and
-   points at that tool. Build DTW only if conforming in a DAW proves too tedious
-   in practice — the detection is the part that was missing.
-5. **Add an app icon** — electron-builder warns "default Electron icon is used".
-   `app-icon.icns`/`.png` exist in the Glaze sources; drop them in `build/`.
-6. **Set up ESLint** — there is deliberately no `lint` script right now rather
-   than a broken one. Flat config + typescript-eslint when it's worth the time.
-
+1. **Reliable drum MIDI from isolated audio.** This is the bottleneck on playable
+   songs, and the measurements are already done — read `scripts/eval/README.md`
+   first. Short version: onset *timing* is solved (99.3% within ±25ms on clean
+   audio); instrument *classification* is not (8.7% F1 on real separated drums,
+   calling nearly everything a cymbal). The plan is to stop classifying: split a
+   drum stem into per-instrument stems (kick/snare/toms/hats/cymbals), then run
+   onset detection on each. Needs PyTorch + model weights, so it is an offline
+   script that emits a `.mid`, not app code — the app's "MIDI only, never infer
+   from audio" rule stays.
+2. **Let Sync align against a drum stem.** Measured: aligning to an isolated stem
+   locked at **3.04** vs **0.65** on the full mix for the same song, recovering
+   the same tempo scale. Cheap, high value, and the user already generates stems.
+   Roughly: an optional "use a separate audio file for analysis" input on Sync.
+3. **README screenshots.** Deferred deliberately — the library contained junk
+   chord-file songs that would have been baked into the images. It is clean now,
+   so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
+   recording indicator) and crop the bottom status bar, which shows the user's
+   account email.
+4. **More pure-function tests.** `chart.ts` parsing/difficulty still has none;
+   `chartShape`/`looksHarmonic` now do.
+5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+   script on purpose.
+6. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 
-- **Judgment "feel"** still needs the real e-kit and the user's ears; no test
-  can establish it. NOT blocked any more: device enumeration (IAC Driver Bus 1
-  is online as of 2026-07-16). Something must still *send* into the IAC bus for
-  note-ons — e.g. Logic Pro playing a drum track out to "IAC Bus 1".
-- **Notarization** is deliberately out of scope; revisit only if the app is
-  ever distributed to another person.
+- **Playable songs.** The real constraint. A song needs a genuine drum MIDI, and
+  free drum MIDI/sheet music is scarce. This is what the transcription
+  workstream exists to solve; until it lands, the library grows only as fast as
+  charts can be found by hand.
+- **Judgment "feel"** needs the kit and the user's ears; no test can establish
+  it. Largely unblocked now that the kit works, but the Sync preview's clicks
+  and the practice-groove kit sound are still unjudged.
+- **Notarization** remains out of scope. The `.dmg` is unsigned; first launch
+  needs a right-click → Open.
 
 ## Test songs
 
-Two, and they serve opposite purposes. Use both.
+The library is clean as of 2026-07-18 (the chord-file imports were deleted).
 
 ### Practice Groove — the ORACLE (committed, `assets/practice-groove/`)
 
 Generated by this repo: the audio is rendered FROM the chart, so the true
 alignment is known (offset 0, scale 1, sample-accurate). It is the only case
 where "is the code right?" is answerable, because with any real pair a failure
-could equally be the files. Uses **all six lanes** and has real structure
-(fills, a break). Original content, so it is committed. See its README.
+could equally be the files. Uses all six lanes. Original content, so committed.
 
-Estimator against it: **-6.3ms / scale 1.00000 / confidence 4.78** — recovers
-truth well inside the ±25ms Perfect window. Without `FRAME_LEAD` it reads -35ms,
-which is how that bug was caught.
+Estimator against it: **-6.3ms / scale 1.00000 / confidence 4.78**. Without
+`FRAME_LEAD` it reads -35ms, which is how that bug was caught.
 
-### Another One Bites the Dust — the REAL-WORLD case (not committed)
+**It is an optimistic upper bound.** Synthetic isolated hits; no bleed, no
+artifacts. A transcriber scoring 51% here scored 8.7% on real separated drums.
+Never treat a result on this song as representative of real audio.
 
-  - MIDI: `~/Downloads/Another-One-Bites-The-Dust-2.mid`
-  - Audio: `~/Downloads/Queen - Another One Bites the Dust (Official Video).mp3`
-    (2.9MB, 222.8s)
-  - **Neither is committed** — copyrighted, and this repo may go open source; a
-    Queen MIDI/mp3 in the history would need a history rewrite to remove. The
-    test fixtures under `tests/fixtures/` are gitignored and derived from these;
-    regenerate with the ffmpeg command in `tests/alignment.test.ts`.
-  - **This pair does NOT align** (MIDI 110.000bpm vs recording ~109.68bpm,
-    ~600ms drift). It is a *good* test case precisely because of that — it is
-    the case the alignment feature exists for — but do not treat "notes don't
-    line up" as a gameplay bug when using it.
-  - Verified 2026-07-16 by running it through the real parse logic: 212.5s,
-    drum track correctly picked (ch 9, percussion, 1380 notes) out of 5 tracks,
-    6.50 nps → **Hard**, 94.6% mapped.
-  - Note **39 (Hand Clap) × 75 is unmapped** by the default GM mapping →
-    correctly ignored, not missed. Good "Learn"-flow test case once Settings
-    exists.
-  - The chart only uses kick / snare / closed hi-hat — **it exercises 3 of the 6
-    lanes**. It will not shake out tom/crash/ride bugs. Get a second song with
-    cymbals and toms before trusting the gameplay canvas.
+### Taylor Swift — Red (real drum chart, in the user's library)
+
+1,944 notes, genuine drum chart, 123bpm. The only real-world ground truth
+available, and the one used for the transcription measurement. A Fadr drum stem
+for it exists in the user's Downloads.
+
+### Copyrighted material is NOT committed
+
+No third-party audio or MIDI is in the repo or its history — deliberately, and
+verified before publishing. Test fixtures under `tests/fixtures/` are gitignored
+and regenerable with `npm run test:fixtures`.
 
 ## Failed approaches
 
@@ -220,35 +224,46 @@ read the reference sources:**
 
 ## Notes for next session
 
-**Carried-over validation checklist** (from the Glaze build's `NEXT-STEPS.md` —
-never verified there against a real launch. Items confirmed in THIS build are
-marked; the rest are open):
+### Handing this to a fresh conversation
 
-- ~~Cold-launch and confirm dark theme applies from first paint~~ — **done
-  2026-07-16**, verified against the packaged `.dmg`, no light flash
-- Full song with a real e-kit: every pad produces a note-on; calibration yields
-  a sane offset; judgments feel right *by ear*
+Read `CLAUDE.md` (how to work here), then this file. The two other docs carrying
+hard-won reasoning are `CHANGELOG.md` (why things are the way they are) and
+`scripts/eval/README.md` (the transcription measurements and plan).
+
+```bash
+npm run dev            # run it
+npm run test           # 74 tests
+npm run midi-sim burst # play the part of an e-kit over the IAC bus
+npm run dist:mac       # installable .dmg
+```
+
+`npm run midi-sim` is how most of the app gets exercised without hardware. It
+cannot test timing *feel* — only a kit and ears can.
+
+### Carried-over hardware checklist
+
+Confirmed items are struck through; the rest still need the kit:
+
+- ~~Cold-launch: dark theme from first paint~~ — verified on the `.dmg`
+- ~~Notes outside the default GM mapping ignored, mappable via Learn~~ — done
+  (note 39 Hand Clap → Snare)
+- ~~Mapping persists across restarts~~ — done
+- ~~Unplug/replug the kit — no crash, no silent stop~~ — the failure mode (a
+  toast flood) was found and fixed 2026-07-18; a real unplug is worth one check
+- Full song with the kit: every pad produces a note-on; judgments feel right
+  *by ear* — **partially done**, the user played a song successfully
 - More than one MIDI device connected — picker lists all; switching works
-- Unplug/replug the kit while running — no crash, no silent stop
-- ~~MIDI with notes outside the default GM mapping — ignored cleanly, mappable
-  via "Learn" without re-import~~ — **done 2026-07-17** (note 39 → Snare)
 - Mismatched pair (MIDI longer than audio) — chart outlasting audio must not
   break gameplay
-- Corrupt/non-MIDI and corrupt/unsupported audio — clear error, not a crash
-- Delete a song — `songs/<id>/` and its results are actually removed
-- Empty library state looks intentional
+- Corrupt/unsupported audio — clear error, not a crash
 - Pause/resume and window blur mid-gameplay
-- Hand-check combo/score against the documented formulas
-- Canvas at 900×640 through full-screen — lanes scale, don't clip
+- Canvas at 900x640 through full-screen — lanes scale, don't clip
 - Hit-window and latency changes take effect without a restart
-- ~~Mapping persists across restarts (`localStorage: drumTrainer.settings`)~~ —
-  **done 2026-07-17** (verified across a remount; a full app restart is still
-  worth one check)
 
-**Nice-to-haves, only if asked:** keyboard fallback for testing without a kit
-(would meaningfully unblock solo development — worth raising with the user);
-export a song's results history.
+### Small things noticed but not done
 
-**Housekeeping:** `drums/` is a git repo nested inside the `~/Documents` git
-repo. Consider adding `Documents/GitHub/drums/` to the parent's `.gitignore` so
-it does not get swept into an unrelated commit.
+- `CLAUDE.md` and this file reference the old Glaze sources by absolute path
+  under the user's home directory. Harmless, but meaningless to anyone else now
+  that the repo is public.
+- `.mp4` audio is not supported. It was raised and then explicitly dropped — do
+  not add it without asking.

@@ -10,7 +10,8 @@ only source of notes), it has no light mode, and it is not a general MIDI editor
 or a DAW. It is a single-user, local-only practice tool.
 
 Deeper context: `PROGRESS.md` (current state — read first), `CHANGELOG.md`
-(what was decided and why), `docs/PORTING.md` (Glaze → Electron mapping).
+(what was decided and why), `scripts/eval/README.md` (drum-transcription
+measurements and the plan for generating charts from audio).
 
 ## Quick reference
 
@@ -29,6 +30,11 @@ so its true alignment is known (offset 0, scale 1). It is the project's ORACLE �
 use it whenever you need to tell "the code is wrong" apart from "that file pair
 doesn't line up". Read its README before changing it.
 
+**But it is an optimistic upper bound.** Synthetic isolated hits, no bleed, no
+artifacts. A transcriber scoring 51% on it scored 8.7% on real separated drums.
+Never report a result measured only on practice-groove as if it generalises;
+check a real recording too. See `scripts/eval/README.md`.
+
 There is no lint script yet — ESLint is not set up. Don't advertise commands
 that don't run; add it and this line changes.
 
@@ -42,10 +48,10 @@ Every session, in this order:
 
 1. **Read `PROGRESS.md` first.** It is the current-state document. Everything
    else in this file is stable background; PROGRESS.md is what changed.
-2. **Run `npm run type-check`.** There is no meaningful unit-test suite (see
-   Principles — the oracle is hardware, not assertions), so the type checker is
-   the cheapest correctness signal available. It must be clean before you start
-   and clean before you stop.
+2. **Run `npm run type-check` and `npm run test`.** 74 tests cover the pure
+   logic — alignment, judging, calibration, chart shape — which is genuinely
+   most of the maths. What they cannot cover is feel (see Principles: the oracle
+   is hardware). Both must be clean before you start and before you stop.
 3. **Pick the top unchecked item in "What's next"** unless the user says
    otherwise. If the top item is blocked, say so rather than silently skipping
    to item two.
