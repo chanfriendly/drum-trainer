@@ -105,6 +105,18 @@ export function registerHandlers(): void {
     });
   });
 
+  ipcMain.handle("songs:setAnalysisAudio", (_event, arg: unknown) => {
+    const obj = asRecord(arg);
+    // null is meaningful (remove the stem), so it can't go through asString.
+    if (obj.path !== null && typeof obj.path !== "string") {
+      throw new Error('Expected string or null for "path".');
+    }
+    return library.setAnalysisAudio(
+      asString(obj.id, "id"),
+      obj.path === null ? null : asString(obj.path, "path"),
+    );
+  });
+
   // ── Results history ─────────────────────────────────────────────────
   ipcMain.handle("results:list", (_event, arg: unknown) =>
     results.listResults(asString(arg, "songId")),

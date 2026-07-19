@@ -120,6 +120,7 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
       // songs:setAlignment. Until then `source: "none"` marks it unaligned, and
       // gameplay should say so rather than silently judging a drifting chart.
       alignment: NO_ALIGNMENT,
+      analysisAudioFile: null,
     };
 
     const full: SongWithChart = { ...meta, chart };
@@ -147,7 +148,12 @@ async function readSong(id: string): Promise<SongWithChart | null> {
     const song = JSON.parse(raw) as SongWithChart;
     // Songs written before these fields existed lack them. Default rather than
     // letting `undefined` reach the renderer's judging math or the Sync screen.
-    return { ...song, alignment: song.alignment ?? NO_ALIGNMENT, bpm: song.bpm ?? null };
+    return {
+      ...song,
+      alignment: song.alignment ?? NO_ALIGNMENT,
+      bpm: song.bpm ?? null,
+      analysisAudioFile: song.analysisAudioFile ?? null,
+    };
   } catch {
     return null;
   }
@@ -180,6 +186,44 @@ export async function setAlignment(id: string, alignment: SongAlignment): Promis
     source: alignment.source,
     confidence: alignment.confidence,
   });
+
+  const { chart: _chart, ...meta } = updated;
+  return meta;
+}
+
+/**
+ * Attach (path) or remove (null) a separate analysis stem for Sync.
+ *
+ * The file is COPIED into the song directory, like import does for the main
+ * audio: a song must stay playable if the original download is deleted.
+ */
+export async function setAnalysisAudio(id: string, sourcePath: string | null): Promise<SongMeta> {
+  const song = await readSong(id);
+  if (!song) throw new Error(`Song not found: ${id}`);
+  const dir = getSongDir(id);
+
+  // Remove the old file in both paths: replacing an .mp3 stem with a .flac one
+  // must not leave a stale analysis.mp3 behind.
+  if (song.analysisAudioFile) {
+    await fs.rm(path.join(dir, song.analysisAudioFile), { force: true }).catch(() => {});
+  }
+
+  let analysisAudioFile: string | null = null;
+  if (sourcePath !== null) {
+    const src = sourcePath.trim();
+    try {
+      await fs.access(src);
+    } catch {
+      throw new Error(`Could not read the audio file "${path.basename(src)}".`);
+    }
+    // "analysis" never collides with the main audio, which is always "audio.<ext>".
+    analysisAudioFile = `analysis${path.extname(src) || ".mp3"}`;
+    await fs.copyFile(src, path.join(dir, analysisAudioFile));
+  }
+
+  const updated: SongWithChart = { ...song, analysisAudioFile };
+  await fs.writeFile(path.join(dir, "song.json"), JSON.stringify(updated), "utf-8");
+  logger.info("library", "Set analysis audio", { id, analysisAudioFile });
 
   const { chart: _chart, ...meta } = updated;
   return meta;

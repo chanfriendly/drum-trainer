@@ -16,8 +16,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, PlayIcon, SquareIcon, WandSparklesIcon } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeftIcon, FileAudioIcon, PlayIcon, SquareIcon, WandSparklesIcon } from "lucide-react";
 
 import type { SongWithChart } from "../../shared/types.js";
 import { Button, Spinner, useToast } from "../components/ui.js";
@@ -98,6 +98,8 @@ function SyncEditor({
   // `estimated` = the machine had a go; `nudged` = a human overrode it.
   const [estimated, setEstimated] = useState(false);
   const [nudged, setNudged] = useState(false);
+  const [settingStem, setSettingStem] = useState(false);
+  const queryClient = useQueryClient();
 
   const preview = useRef(new AlignmentPreview());
   useEffect(() => {
@@ -142,6 +144,31 @@ function SyncEditor({
       setAnalyzing(false);
     }
   }, [song, toast]);
+
+  // Attach (or remove) an isolated drum stem for the estimator to analyse.
+  // Invalidate rather than track locally: the song prop re-renders with the
+  // new analysisAudioFile, and the next Auto-align picks it up in loadAnalysisPcm.
+  const setStem = async (pick: boolean) => {
+    setSettingStem(true);
+    try {
+      let stemPath: string | null = null;
+      if (pick) {
+        stemPath = await window.drumTrainer.songs.pickAudio();
+        if (!stemPath) return; // dialog cancelled — not an error, change nothing
+      }
+      await window.drumTrainer.songs.setAnalysisAudio(song.id, stemPath);
+      await queryClient.invalidateQueries({ queryKey: ["song", song.id] });
+      toast.success(
+        pick
+          ? "Stem attached. Run Auto-align again — it will analyse the stem now."
+          : "Stem removed. Auto-align will analyse the full recording.",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSettingStem(false);
+    }
+  };
 
   const pickCandidate = (index: number) => {
     const c = analysis?.candidates[index];
@@ -221,6 +248,37 @@ function SyncEditor({
               <WandSparklesIcon className="size-4" />
               {analyzing ? "Analysing…" : "Auto-align"}
             </Button>
+          </div>
+
+          {/* Guitar, bass and vocals all produce onsets; on a full mix the
+              estimator locks onto all of them. An isolated drum stem gives it
+              only drums to match — measured 4.7× the lock strength on the same
+              song. Playback is untouched: the stem feeds analysis only. */}
+          <div className="mt-4 flex items-center justify-between gap-4 rounded-lg bg-surface p-3">
+            <div className="flex min-w-0 items-center gap-2 text-xs">
+              <FileAudioIcon className="size-4 shrink-0 text-text-muted" />
+              {song.analysisAudioFile ? (
+                <span className="truncate">
+                  Analysing a <span className="font-medium text-drum-tom">drum stem</span>
+                  <span className="text-text-muted"> — locks on much better than the full mix</span>
+                </span>
+              ) : (
+                <span className="text-text-muted">
+                  Analysing the full recording. Got an isolated drum stem (Fadr, Demucs)? Attaching
+                  it gives the estimator only drums to lock onto.
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button onClick={() => void setStem(true)} disabled={settingStem || analyzing}>
+                {song.analysisAudioFile ? "Replace stem…" : "Use a drum stem…"}
+              </Button>
+              {song.analysisAudioFile && (
+                <Button onClick={() => void setStem(false)} disabled={settingStem || analyzing}>
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
 
           {analysis && (
@@ -314,6 +372,15 @@ function SyncEditor({
               −1 {song.bpm ? "bar" : "½s"}
             </Button>
             <Button onClick={() => nudge(barSeconds * 1000)}>+1 {song.bpm ? "bar" : "½s"}</Button>
+            {/* Beat nudges: the estimator's ambiguity is BEAT-shaped, not just
+                bar-shaped (measured on a real pair — every ranked candidate sat
+                on a beat grid). A one-beat miss must not take 48 ±10ms clicks. */}
+            {song.bpm && (
+              <>
+                <Button onClick={() => nudge((-barSeconds * 1000) / 4)}>−1 beat</Button>
+                <Button onClick={() => nudge((barSeconds * 1000) / 4)}>+1 beat</Button>
+              </>
+            )}
             <Button onClick={() => nudge(-10)}>−10ms</Button>
             <Button onClick={() => nudge(10)}>+10ms</Button>
           </div>

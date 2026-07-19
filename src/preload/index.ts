@@ -53,6 +53,9 @@ const api = {
     /** Persist a chart↔audio alignment. See SongAlignment for why this exists. */
     setAlignment: (id: string, alignment: SongAlignment): Promise<SongMeta> =>
       ipcRenderer.invoke("songs:setAlignment", { id, alignment }),
+    /** Attach a drum stem for Sync's estimator (path), or remove it (null). */
+    setAnalysisAudio: (id: string, path: string | null): Promise<SongMeta> =>
+      ipcRenderer.invoke("songs:setAnalysisAudio", { id, path }),
     /** Native open dialogs — the renderer cannot reach the filesystem itself. */
     pickAudio: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickAudio"),
     pickMidi: (): Promise<string | null> => ipcRenderer.invoke("dialog:pickMidi"),

@@ -160,6 +160,7 @@ first paint flashes light.
 | `songs:get` | invoke | `(id)` → `SongWithChart` |
 | `songs:delete` | invoke | `(id)` → `{ok}` |
 | `songs:setAlignment` | invoke | `({id, alignment})` → `SongMeta` |
+| `songs:setAnalysisAudio` | invoke | `({id, path \| null})` → `SongMeta` |
 | `dialog:pickAudio` / `dialog:pickMidi` | invoke | → `string \| null` |
 | `results:list` | invoke | `(songId)` → `SongResult[]` |
 | `results:save` | invoke | `(input)` → `SongResult` |
@@ -170,8 +171,9 @@ Audio is **not** on this list deliberately — it is served over
 
 **Storage.** Main process, under `app.getPath("userData")`:
 `songs/<id>/` holds the copied audio file, `song.json` (metadata +
-`chart: {time, midiNote, velocity}[]`), and `results.json` (`SongResult[]`,
-newest first). Renderer, in `localStorage` under `drumTrainer.settings`:
+`chart: {time, midiNote, velocity}[]`), `results.json` (`SongResult[]`,
+newest first), and optionally `analysis.<ext>` — an isolated drum stem that
+only Sync's estimator reads (playback always uses the main audio). Renderer, in `localStorage` under `drumTrainer.settings`:
 `{midiMapping, hitWindows: {perfectMs, goodMs, edgeMs}, latencyOffsetMs,
 selectedDeviceIndex}`.
 

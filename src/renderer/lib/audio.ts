@@ -16,14 +16,15 @@ export function songAudioUrl(song: SongMeta): string {
   return `song-audio://audio?${params.toString()}`;
 }
 
-/** Decode a song's audio at its native rate. Cached — decoding is expensive. */
+/** Decoded playback audio, keyed by song id — gameplay and preview reuse it. */
 const decodeCache = new Map<string, AudioBuffer>();
 
-export async function decodeSongAudio(song: SongMeta): Promise<AudioBuffer> {
-  const cached = decodeCache.get(song.id);
+/** Decode a song-audio:// file at its native rate. */
+async function decodeUrl(url: string, label: string, cacheKey?: string): Promise<AudioBuffer> {
+  const cached = cacheKey ? decodeCache.get(cacheKey) : undefined;
   if (cached) return cached;
 
-  const response = await fetch(songAudioUrl(song));
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Could not load audio (HTTP ${response.status}). The file may be missing.`);
   }
@@ -39,13 +40,13 @@ export async function decodeSongAudio(song: SongMeta): Promise<AudioBuffer> {
       ctx.decodeAudioData(
         bytes,
         (buffer) => {
-          decodeCache.set(song.id, buffer);
+          if (cacheKey) decodeCache.set(cacheKey, buffer);
           resolve(buffer);
         },
         (err) =>
           reject(
             new Error(
-              `Could not decode "${song.audioFile}". The file may be corrupt or in an unsupported format. (${err?.message ?? "unknown"})`,
+              `Could not decode "${label}". The file may be corrupt or in an unsupported format. (${err?.message ?? "unknown"})`,
             ),
           ),
       );
@@ -55,8 +56,25 @@ export async function decodeSongAudio(song: SongMeta): Promise<AudioBuffer> {
   }
 }
 
+export async function decodeSongAudio(song: SongMeta): Promise<AudioBuffer> {
+  return decodeUrl(songAudioUrl(song), song.audioFile, song.id);
+}
+
 /**
- * Mono PCM at ANALYSIS_SAMPLE_RATE, for the onset envelope.
+ * Decode whatever Sync should ANALYSE: the attached drum stem when the song has
+ * one, otherwise the playback audio. Deliberately uncached — replacing the stem
+ * reuses the same file name, so a cache keyed on anything stable would serve
+ * the old stem, and analysis runs once per Auto-align click anyway.
+ */
+async function decodeAnalysisAudio(song: SongMeta): Promise<AudioBuffer> {
+  if (!song.analysisAudioFile) return decodeSongAudio(song);
+  const params = new URLSearchParams({ id: song.id, file: song.analysisAudioFile });
+  return decodeUrl(`song-audio://audio?${params.toString()}`, song.analysisAudioFile);
+}
+
+/**
+ * Mono PCM at ANALYSIS_SAMPLE_RATE, for the onset envelope. Reads the analysis
+ * stem when one is attached (see decodeAnalysisAudio), else the playback audio.
  *
  * Resampling goes through an OfflineAudioContext rather than naive decimation:
  * dropping samples aliases high frequencies down into the spectrum, and the
@@ -64,7 +82,7 @@ export async function decodeSongAudio(song: SongMeta): Promise<AudioBuffer> {
  * garbage there would degrade the estimate in a way that's hard to attribute.
  */
 export async function loadAnalysisPcm(song: SongMeta): Promise<Float32Array> {
-  const buffer = await decodeSongAudio(song);
+  const buffer = await decodeAnalysisAudio(song);
 
   const frames = Math.ceil((buffer.duration * ANALYSIS_SAMPLE_RATE) / 1);
   const offline = new OfflineAudioContext(1, frames, ANALYSIS_SAMPLE_RATE);

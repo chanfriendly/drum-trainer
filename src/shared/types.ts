@@ -118,6 +118,15 @@ export interface SongMeta {
   bpm: number | null;
   /** How the chart lines up with the audio. See SongAlignment. */
   alignment: SongAlignment;
+  /**
+   * Optional separate audio used ONLY by Sync's estimator — an isolated drum
+   * stem of the same recording. Measured on a real pair: aligning to the stem
+   * locked at 3.04 vs 0.65 against the full mix (same tempo recovered), because
+   * nothing but drums produces onsets there. Playback and gameplay always use
+   * `audioFile`; this file only feeds the onset envelope. File name only,
+   * served over `song-audio://` like the main audio. Null = analyse the mix.
+   */
+  analysisAudioFile: string | null;
 }
 
 export interface SongWithChart extends SongMeta {
