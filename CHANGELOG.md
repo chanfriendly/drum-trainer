@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+### 2026-07-18 (night): Sync-against-stem shipped; the estimator has a ranking problem
+
+**Feature.** A song can carry an optional isolated drum stem
+(`analysis.<ext>` in its folder, `analysisAudioFile` in song.json, attached
+via `songs:setAnalysisAudio`). Sync's estimator decodes it instead of the
+playback audio; playback and gameplay never touch it. Rationale measured
+2026-07-18: stem lock 3.04 vs mix 0.65 in the Python harness. The stem is
+COPIED in, like import audio — a song must survive its Downloads folder being
+cleaned. Analysis decodes are deliberately uncached: a replaced stem reuses
+the same file name, so any stable cache key would serve the old bytes.
+
+**Verified by driving the real dev app over CDP** (attach → disk → decode →
+estimate → UI), not just types. The probe compared full-mix vs stem analysis
+on Red and found something bigger than the feature:
+
+**The renderer's candidate ranking scores the truth 16th of 17.** Three
+independent measurements corroborate Red's offset at ≈−1501ms (Python stem
+lock 3.04; ADTOF's independent transcription agreeing with the chart to 94.3%
+within ±25ms at that offset; identical tempoScale from every path). The
+renderer's `analyzeAlignment` has that offset in its candidate list (−1482ms,
+"+8 beats") but scores it f1 0.585 while every beat-shifted WRONG candidate
+scores ~0.62 — a flat, inverted landscape where the Python z-score metric
+separates 3.04 vs 0.65. The saved alignment (−1969ms, `source: "auto"`, never
+ear-confirmed) is therefore probably one beat off. Not chased tonight: the
+scoring is tuned code entangled with Sync UX, and the ear-check that settles
+which offset is right happens at the kit tomorrow anyway. Full notes in
+PROGRESS → What's next #2.
+
+**Consequence shipped tonight:** ±1 beat nudge buttons on Sync. The observed
+ambiguity is beat-shaped, and the prior controls (±1 bar, ±10ms) made a
+one-beat correction cost 48 clicks.
+
+**Also:** `chart-parse.test.ts` closes the chart.ts coverage gap through real
+MIDI byte round-trips. MIDI fact asserted en route: a velocity-0 note-on is
+the note-off idiom, so it can never become a chart note.
+
 ### 2026-07-18 (later): Pretrained ADTOF replaces the separation plan
 
 **Decision: measure existing pretrained models before building the separation

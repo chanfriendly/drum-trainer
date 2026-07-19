@@ -131,34 +131,58 @@ practice-groove kit is pleasant to drum against.
       Olivia Rodrigo) → `~/Downloads/adtof-charts/`, verified importable
       percussion MIDI. Separation pipeline demoted to fallback. See
       `scripts/transcribe/README.md` and CHANGELOG.
+- [x] 2026-07-18 — **Sync can analyse a drum stem.** Optional per-song
+      `analysis.<ext>` copied into the song dir, new `songs:setAnalysisAudio`
+      IPC, stem row + ±1 beat nudges on Sync. Verified END TO END in the
+      running dev app over CDP: attach → file lands on disk → estimator decodes
+      the stem → identical tempoScale (0.98400) from stem and mix → UI renders.
+      The same probe found the scorer problem now at "What's next" #2, and that
+      Red's saved alignment was never ear-confirmed. Playback untouched by
+      design. NOT verified: none of this changes timing feel; no kit involved.
+- [x] 2026-07-18 — `chart-parse.test.ts`: parseChart/difficultyFor/
+      notesPerSecond covered through real MIDI byte round-trips (83 tests
+      total). Found en route: a velocity-0 note-on is a note-off and
+      @tonejs/midi drops it before parseChart — asserted as behavior.
+- [x] 2026-07-18 — The Red song now has its Fadr stem attached as analysis
+      audio (left in place — it is the real configuration for the kit session).
 
 
 ## What's next
 
 Prioritised. The top item is the real project now.
 
-1. **Play an ADTOF-generated chart on the kit.** The pipeline exists and
-   measures well (66.4% F1 — see 2026-07-18 in "What's done"), but nobody has
-   drummed against one. Import a chart from `~/Downloads/adtof-charts/` with
-   its stem (or full mix) as audio, Sync it, play it. The open question is
-   *feel*: does 34% hi-hat recall read as "sparse but fair" or "broken"? Only
-   the kit answers that. If hats are the dealbreaker, the fallback is the
-   superseded separation plan in `scripts/eval/README.md` — which now has to
-   beat 66.4%, not 8.7%.
-2. **Let Sync align against a drum stem.** Measured: aligning to an isolated stem
-   locked at **3.04** vs **0.65** on the full mix for the same song, recovering
-   the same tempo scale. Cheap, high value, and the user already generates stems.
-   Roughly: an optional "use a separate audio file for analysis" input on Sync.
+1. **Kit session: play an ADTOF chart, and ear-check Red's alignment.** Two
+   things only ears can settle:
+   - Import a chart from `~/Downloads/adtof-charts/` with its stem as audio,
+     Sync it, play it. Does 34% hi-hat recall read as "sparse but fair" or
+     "broken"? If hats are the dealbreaker, the fallback is the superseded
+     separation plan in `scripts/eval/README.md` — which now must beat 66.4%.
+   - **Red's saved alignment is probably one beat off.** It is `source: "auto"`
+     from the full mix (−1969ms), never ear-confirmed, and three independent
+     measurements corroborate ≈−1501ms instead (see 2026-07-18 evening entry in
+     CHANGELOG). Open Sync → Preview; if the clicks sit just off the drums,
+     **+1 beat** (button added for exactly this) should snap them on. Which
+     offset your ear picks is also the ground truth the estimator work below
+     needs.
+2. **Investigate the alignment scorer — it ranks the corroborated offset 16/17.**
+   Measured in the running app on the Red stem: `analyzeAlignment`'s candidate
+   f1 scores the likely-true offset (−1482ms, "+8 beats") at 0.585 while every
+   beat-shifted wrong candidate scores ~0.62, and the whole list is flat
+   (0.59–0.63) where the Python harness's z-score lock separates sharply
+   (3.04 vs 0.65). Same envelope, same song, opposite verdicts — suspect the
+   f1 tolerance/matching flattens the peak. The eval README's banded-DTW note
+   is the bigger fix in the same area. Also noticed: bar/beat nudges are sized
+   in chart seconds but applied to the audio-time offset without × tempoScale
+   (~31ms error per bar at 0.984) — harmless while the 10ms nudge exists, but
+   fix it in passing.
 3. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
    recording indicator) and crop the bottom status bar, which shows the user's
    account email.
-4. **More pure-function tests.** `chart.ts` parsing/difficulty still has none;
-   `chartShape`/`looksHarmonic` now do.
-5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+4. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
    script on purpose.
-6. **Hardware validation pass** — the checklist under "Notes for next session".
+5. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 
