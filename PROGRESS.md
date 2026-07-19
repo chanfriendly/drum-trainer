@@ -121,21 +121,30 @@ practice-groove kit is pleasant to drum against.
       `scripts/eval/README.md`.
 - [x] 2026-07-18 — Fixed the MIDI-device toast flood at two layers (toast dedupe
       + don't open a device that isn't listed). This was the unplugged-kit case.
+- [x] 2026-07-18 — **Transcription workstream: solved to first order, by
+      measurement instead of construction.** Ran pretrained ADTOF (CRNN trained
+      on rhythm-game charts) through the eval harness before building the
+      separation pipeline: **66.4% F1 @±25ms on the real TS stem vs 8.7%
+      baseline** (kick 88.5% / snare 78.8% / 94.3% of matches inside the
+      Perfect window). Deliverable: `scripts/transcribe/adtof_transcribe.py`
+      (+ `.venv-adt`, Python 3.11). Charted both stem-only songs (Kate Bush,
+      Olivia Rodrigo) → `~/Downloads/adtof-charts/`, verified importable
+      percussion MIDI. Separation pipeline demoted to fallback. See
+      `scripts/transcribe/README.md` and CHANGELOG.
 
 
 ## What's next
 
 Prioritised. The top item is the real project now.
 
-1. **Reliable drum MIDI from isolated audio.** This is the bottleneck on playable
-   songs, and the measurements are already done — read `scripts/eval/README.md`
-   first. Short version: onset *timing* is solved (99.3% within ±25ms on clean
-   audio); instrument *classification* is not (8.7% F1 on real separated drums,
-   calling nearly everything a cymbal). The plan is to stop classifying: split a
-   drum stem into per-instrument stems (kick/snare/toms/hats/cymbals), then run
-   onset detection on each. Needs PyTorch + model weights, so it is an offline
-   script that emits a `.mid`, not app code — the app's "MIDI only, never infer
-   from audio" rule stays.
+1. **Play an ADTOF-generated chart on the kit.** The pipeline exists and
+   measures well (66.4% F1 — see 2026-07-18 in "What's done"), but nobody has
+   drummed against one. Import a chart from `~/Downloads/adtof-charts/` with
+   its stem (or full mix) as audio, Sync it, play it. The open question is
+   *feel*: does 34% hi-hat recall read as "sparse but fair" or "broken"? Only
+   the kit answers that. If hats are the dealbreaker, the fallback is the
+   superseded separation plan in `scripts/eval/README.md` — which now has to
+   beat 66.4%, not 8.7%.
 2. **Let Sync align against a drum stem.** Measured: aligning to an isolated stem
    locked at **3.04** vs **0.65** on the full mix for the same song, recovering
    the same tempo scale. Cheap, high value, and the user already generates stems.
@@ -153,10 +162,11 @@ Prioritised. The top item is the real project now.
 
 ## What's blocked
 
-- **Playable songs.** The real constraint. A song needs a genuine drum MIDI, and
-  free drum MIDI/sheet music is scarce. This is what the transcription
-  workstream exists to solve; until it lands, the library grows only as fast as
-  charts can be found by hand.
+- **Playable songs.** Largely unblocked as of 2026-07-18: any song Fadr can
+  produce a drum stem for can now be charted by
+  `scripts/transcribe/adtof_transcribe.py` (measured 66.4% F1). What remains
+  unproven is whether such a chart *feels* playable on the kit — that is now
+  the top "What's next" item.
 - **Judgment "feel"** needs the kit and the user's ears; no test can establish
   it. Largely unblocked now that the kit works, but the Sync preview's clicks
   and the practice-groove kit sound are still unjudged.

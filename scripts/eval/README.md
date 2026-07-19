@@ -156,7 +156,44 @@ Timing held up far better than classification, as always: 60% of matches inside
 **Conclusion: hand-tuned band-energy classification is structurally wrong, not
 under-tuned.** Do not try to fix it by moving thresholds.
 
-## The plan: stop classifying, separate instead
+## Findings (2026-07-18, evening) — a pretrained model clears the bar
+
+Before building the separation pipeline below, the cheaper experiment was run:
+swap a pretrained ADT model in behind `--candidate` — the interface this
+harness was built around. **ADTOF** (CRNN trained on crowdsourced rhythm-game
+drum charts; 5-class vocabulary kick/snare/tom/hihat/cymbal) via
+`scripts/transcribe/adtof_transcribe.py`:
+
+| audio | tol | baseline | ADTOF |
+| --- | --- | --- | --- |
+| TS – Red, real Fadr drum stem (auto-align, lock 3.04) | ±25ms | 8.7% | **66.4%** |
+| TS – Red, real Fadr drum stem | ±50ms | 14.4% | **70.4%** |
+| practice-groove (oracle) | ±25ms | 51.3% | 55.4% |
+
+Per lane on the real stem @±25ms: kick **88.5%**, snare **78.8%**, hihat 47.4%
+(recall 34% but precision 77% — it under-charts hats rather than inventing
+them), tom 28.4% (over-triggers), crash 53.5%. Timing: mean −5.4ms, stdev
+11.1ms, **94.3% of matches inside ±25ms**. The ~10ms early bias is constant, so
+per-song Sync alignment absorbs it.
+
+Two readings of the synthetic-vs-real gap flipping direction (8.7%→66.4% real,
+51%→55% synthetic): the learned model barely improves on synthetic audio
+because the oracle's rendered kit is out-of-domain for it — practice-groove is
+an optimistic bound for hand-tuned DSP but a mildly *pessimistic* one for
+models trained on records. Both songs must still be reported together.
+
+**Consequence: the separation pipeline is demoted from plan to fallback.** It
+would now have to beat 66.4%, not 8.7%, to justify PyTorch + model downloads —
+and per-stem onset detection carries a risk the original plan understated:
+separated stems bleed, so "is this snare-stem onset a snare or hat bleed?" is
+classification re-imported as thresholding. The measured case for revisiting it
+is hi-hat recall. See `scripts/transcribe/README.md` for usage and limits.
+
+## The superseded plan: stop classifying, separate instead
+
+> **Superseded 2026-07-18** by the ADTOF result above — kept because its
+> reasoning explains what a fallback would need to fix (hi-hat recall) and
+> what it must beat (66.4%, not 8.7%).
 
 Classification is the broken half; onset detection is the solved half. So remove
 the need to classify:

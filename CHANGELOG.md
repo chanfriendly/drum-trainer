@@ -5,6 +5,49 @@ Most recent first.
 
 ---
 
+### 2026-07-18 (later): Pretrained ADTOF replaces the separation plan
+
+**Decision: measure existing pretrained models before building the separation
+pipeline.** The prior plan (drum stem → per-instrument stems → per-stem onset
+detection) was reasoned but had two problems: it was days of work, and it
+leaned on the "99.3% onset timing" number, which was measured on *clean* audio
+— separated stems bleed, so per-stem onset detection quietly re-imports
+classification as thresholding. The harness's `--candidate` interface existed
+precisely to test a real model first. An hour of setup answered the question.
+
+**ADTOF is the answer, and by a wide margin.** It is a CRNN trained on
+crowdsourced *rhythm-game drum charts* — the exact artifact this app consumes,
+with the rhythm-game 5-lane vocabulary. On the real Taylor Swift Fadr stem:
+**66.4% F1 @±25ms vs the baseline's 8.7%** (kick 88.5%, snare 78.8%, 94.3% of
+matches inside the Perfect window). Weaknesses: hi-hat recall 34% (but
+precision 77% — under-charts, doesn't hallucinate), toms over-trigger, single
+cymbal class. Full numbers in `scripts/eval/README.md`; usage and limits in
+`scripts/transcribe/README.md`. Separation is demoted to a fallback that must
+now beat 66.4%.
+
+**Deliverable**: `scripts/transcribe/adtof_transcribe.py` + `.venv-adt`
+(Python 3.11 — the ADT ecosystem breaks on 3.12+). Charted the two stem-only
+songs the user had no MIDI for (Kate Bush – Hounds of Love, 923 notes;
+Olivia Rodrigo – drop dead, 1,071 notes) → `~/Downloads/adtof-charts/`, both
+verified channel-9 percussion that `parseChart`/`looksHarmonic` will accept.
+
+**Two silent failure modes found and encoded in the script:**
+
+- ADTOF's checkpoint is Keras 2; under Keras 3 it dies on
+  `keras.optimizers.legacy`. Fix: `tf_keras` + `TF_USE_LEGACY_KERAS=True`,
+  set inside the script before TF imports.
+- ADTOF discovers input via `glob`, so Fadr's `[fadr.com] …` paths (brackets =
+  glob character class) match nothing — **no output, no error**. The script
+  stages such paths to a clean temp dir. This one cost a debugging cycle and
+  would have cost the user more.
+
+**Interpretation note for future measurements**: the synthetic oracle flipped
+from optimistic (for hand-tuned DSP: 51% → 8.7% real) to mildly pessimistic
+(for a learned model: 55% synthetic vs 66% real — the rendered kit is
+out-of-domain for a model trained on records). practice-groove still catches
+"the code is wrong", but its score no longer predicts real-audio quality in
+either direction. Report both songs, always.
+
 ### 2026-07-18: Played on a real kit; chord-file imports; the transcription verdict
 
 **The premise is validated.** The user connected their e-kit and played a song
