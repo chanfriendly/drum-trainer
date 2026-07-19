@@ -21,6 +21,7 @@ import type {
   SongMeta,
   SongResult,
   SongWithChart,
+  TranscriptionResult,
 } from "../shared/types.js";
 
 /** Subscribe helper — returns an unsubscribe fn so React effects can clean up. */
@@ -53,6 +54,17 @@ const api = {
     /** Persist a chart↔audio alignment. See SongAlignment for why this exists. */
     setAlignment: (id: string, alignment: SongAlignment): Promise<SongMeta> =>
       ipcRenderer.invoke("songs:setAlignment", { id, alignment }),
+    /** Is the offline transcription toolchain installed on this machine? */
+    canTranscribe: (): Promise<boolean> => ipcRenderer.invoke("songs:canTranscribe"),
+    /**
+     * Generate a drum chart from a song's audio. Explicit and user-initiated —
+     * never a fallback for a missing MIDI. See transcription-service.ts.
+     */
+    transcribeFromAudio: (audioPath: string): Promise<TranscriptionResult> =>
+      ipcRenderer.invoke("songs:transcribeFromAudio", { audioPath }),
+    /** Stage messages while a transcription runs ("isolating drums…"). */
+    onTranscribeProgress: (callback: (stage: string) => void): (() => void) =>
+      subscribe<string>("songs:transcribeProgress", callback),
     /** Attach a drum stem for Sync's estimator (path), or remove it (null). */
     setAnalysisAudio: (id: string, path: string | null): Promise<SongMeta> =>
       ipcRenderer.invoke("songs:setAnalysisAudio", { id, path }),

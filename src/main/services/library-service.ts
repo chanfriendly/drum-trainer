@@ -121,7 +121,23 @@ export async function importSong(input: ImportSongInput): Promise<SongMeta> {
       // gameplay should say so rather than silently judging a drifting chart.
       alignment: NO_ALIGNMENT,
       analysisAudioFile: null,
+      chartSource: input.chartSource ?? "midi",
     };
+
+    // Copy the analysis stem in the same breath as the audio, so a transcribed
+    // song arrives already able to Sync well instead of needing a second step.
+    if (input.analysisAudioPath) {
+      try {
+        const ext = path.extname(input.analysisAudioPath) || ".wav";
+        meta.analysisAudioFile = `analysis${ext}`;
+        await fs.copyFile(input.analysisAudioPath, path.join(dir, meta.analysisAudioFile));
+      } catch (error) {
+        // A missing stem must not fail the import — it is an optimisation for
+        // Sync, not part of the song.
+        meta.analysisAudioFile = null;
+        logger.warn("library", "Could not copy analysis audio", error);
+      }
+    }
 
     const full: SongWithChart = { ...meta, chart };
     await fs.writeFile(path.join(dir, "song.json"), JSON.stringify(full), "utf-8");
@@ -153,6 +169,8 @@ async function readSong(id: string): Promise<SongWithChart | null> {
       alignment: song.alignment ?? NO_ALIGNMENT,
       bpm: song.bpm ?? null,
       analysisAudioFile: song.analysisAudioFile ?? null,
+      // Everything imported before this field existed came from a real MIDI.
+      chartSource: song.chartSource ?? "midi",
     };
   } catch {
     return null;

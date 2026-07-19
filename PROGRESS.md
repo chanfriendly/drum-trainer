@@ -22,26 +22,33 @@ done: the user played a song through with their e-kit and it worked.
 it.** See `scripts/eval/README.md` for the measurements and
 `scripts/transcribe/README.md` for the pipeline.
 
-### The workflow, end to end (as of 2026-07-19: functioning)
+### The workflow, end to end (as of 2026-07-19: functioning, and in-app)
+
+**Have a MIDI?** Library → Import Song (audio + `.mid`) → Sync → play.
+
+**Only have audio?** Library → **"Audio only…"** does the whole thing:
 
 ```
-song audio  →  drum stem (Fadr/Demucs, external)   verified sample-aligned to the mix
-            →  .mid       (scripts/transcribe/adtof_transcribe.py — feed it the MIX)
-            →  import     (full-mix audio + that .mid)
-            →  Sync       (attach the STEM as analysis audio, Auto-align)
-            →  play
+song audio →  demucs isolates the drums
+           →  ADTOF transcribes the MIX (not the stem — measured)
+           →  notes gated by the stem, crash threshold 0.55
+           →  imports, attaches the stem as Sync's analysis audio
+           →  lands on Sync, marked chartSource:"transcribed"
 ```
 
-Every step has been exercised on real songs. Two songs were carried through it
-end to end and played on the kit. What still varies is **chart quality**, not
-the plumbing: ADTOF nails some songs and collapses on others (see "What's next"
-#1). Alignment, which was the broken link, now lands within 8ms of established
-truth on all three known-truth pairs.
+~1 minute a song. Needs the Python toolchain (`scripts/transcribe/README.md`);
+without it `songs:canTranscribe` returns false and the button is absent.
+The CLI equivalent is `scripts/transcribe/chart_from_audio.py`.
 
-**The one manual step is running the Python script**, deliberately — it needs
-TensorFlow and model weights, so it stays an offline tool. The app's "MIDI
-only, never infer from audio" rule is intact: the script emits a `.mid` that
-imports like any other.
+Every step has been exercised on real songs. What still varies is **chart
+quality**, not the plumbing: ADTOF nails some songs and collapses on others.
+Alignment, which was the broken link, now lands within 8ms of established truth
+on all three known-truth pairs.
+
+**Generated songs are marked** `chartSource: "transcribed"` and badged
+**Generated** in the library. CLAUDE.md critical rule 2 draws the line: charting
+from audio *implicitly* (as a fallback for a missing MIDI) is still forbidden;
+doing it because the player asked, and saying so, is not.
 
 ### Read this before touching timing or imports
 
@@ -181,6 +188,21 @@ practice-groove kit is pleasant to drum against.
       sends that note. Settings now lists unmapped notes found in the library
       with GM names and counts, and assigns them to a lane in one click.
       Verified in the built app against the real library (89 tests).
+- [x] 2026-07-19 — **Chart generation is in the app** ("Audio only…"). Pipeline
+      script + `transcription-service.ts` (spawns the external venv, streams
+      progress), `chartSource` provenance with a **Generated** badge, stem
+      attached at import. Verified through the running app: `canTranscribe`
+      true, real transcription 25s, imported with `chartSource:"transcribed"`
+      and `analysis.wav`. CLAUDE.md critical rule 2 now states the
+      explicit-vs-implicit line rather than being quietly reinterpreted.
+      Chose demucs over automating Logic (no scripting API; Logic's splitter is
+      demucs-derived anyway) — measured equivalent, 1,131 vs 1,133 notes.
+      **NOT verified:** the native file-picker step of that flow, and no
+      generated chart has been played on the kit yet.
+- [x] 2026-07-19 — **Gate bug that would have ruined sparse songs**: checking
+      only the onset's 100ms window deleted 200 of practice-groove's 262 notes
+      (RMS flattens a transient; dense songs hide it). Now spans the decay, and
+      abandons gating outright if it would drop >40% of the chart.
 - [x] 2026-07-19 — **Transcribe the MIX, align the STEM.** The "give the model
       the cleanest input" intuition was backwards: ADTOF trained on full mixes,
       and separation strips quiet hi-hats before it sees them. On Red vs its
@@ -216,7 +238,11 @@ practice-groove kit is pleasant to drum against.
 
 Prioritised. The top item is the real project now.
 
-1. **Play the v2 charts and judge the hi-hats.** `~/Downloads/adtof-charts/`
+1. **Drive "Audio only…" by hand once, then play the result.** The flow is
+   verified through IPC but the native file-picker step is not, and no generated
+   chart has been played on a kit. Pick a song you have only audio for; expect
+   ~1 minute. Then judge the hi-hats — see below.
+2. **Play the v2 charts and judge the hi-hats.** `~/Downloads/adtof-charts/`
    now holds `(drums, v2 gated)` files — mix-transcribed, stem-gated, crash
    threshold 0.55. These fix the two things heard on the first mix chart:
    phantom kicks in the intro (first note 11.4s → 43.1s on drop dead) and
@@ -224,20 +250,20 @@ Prioritised. The top item is the real project now.
    FLAC as audio, attach the drum stem in Sync, play. Remaining question is
    unchanged: are the hi-hats "sparse but fair" or "broken"? Do not judge on
    Hounds of Love — still 67% toms, a known-bad case.
-2. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
+3. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a
    guaranteed miss. ~1% of that song, but it is a general case (any two chart
    notes that map to the same lane at the same time) and gameplay does not
    handle it. Cheap: dedupe by (lane, time) when building the judge list.
-3. **README screenshots.** Deferred deliberately — the library contained junk
+4. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
    recording indicator) and crop the bottom status bar, which shows the user's
    account email.
-4. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
    script on purpose.
-5. **Hardware validation pass** — the checklist under "Notes for next session".
+6. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 

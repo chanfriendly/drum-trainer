@@ -29,12 +29,25 @@ right, and on a real record it invents hundreds of cymbals that aren't there.)
   Sibelius, and MusicXML all export MIDI directly. This is often the easiest
   route, because tabs exist for songs with no standalone `.mid`. Export, then
   import the MIDI. There's nothing special to do in the app.
-- **or generate one from the recording** with
-  [`scripts/transcribe/`](scripts/transcribe/README.md) — an offline script that
-  runs a pretrained drum-transcription model and writes a `.mid` you import
-  normally. It gets roughly **72% of notes right** on a real song, with kick and
-  snare around 90%; hi-hats and cymbals are weaker, and some songs come out
-  unusable. Read its limits before relying on it.
+- **or let the app generate one from the recording.** With the toolchain
+  installed (below), the Library grows an **"Audio only…"** button: pick a
+  song's audio and it isolates the drums, transcribes them, imports the result
+  and drops you on the Sync screen. About a minute a song. Those songs are
+  badged **Generated** everywhere they appear, because they are a good guess and
+  not a real chart — roughly **72% of notes right**, kick and snare around 90%,
+  hi-hats and cymbals weaker, and some songs come out unusable. See
+  [Known issues](#known-issues) and
+  [`scripts/transcribe/`](scripts/transcribe/README.md).
+
+  The one-time setup, in the repo (it is ~2GB of model tooling, far too large to
+  ship inside the app, so the app locates it rather than bundling it):
+
+  ```bash
+  /opt/homebrew/bin/python3.11 -m venv .venv-adt
+  .venv-adt/bin/pip install "git+https://github.com/MZehren/ADTOF" tf_keras demucs
+  ```
+
+  Without it, the button simply isn't there and nothing else changes.
 
 Scanned or paper sheet music won't work — reading it needs optical music
 recognition, which is weakest exactly on drum notation.
@@ -166,7 +179,14 @@ depends on the song.
   song**, so treat it as a starting point.
 - **Phantom notes in intros and breakdowns.** Transcribing a full mix invents
   drums where there are none — one test song charted its first note 19 seconds
-  before the drums actually enter. Pass `--gate-with <drum stem>` to drop them.
+  before the drums actually enter. The in-app flow filters these automatically
+  using the isolated stem; the script needs `--gate-with <drum stem>`.
+- **That filter switches itself off on sparse material.** It decides "no drum is
+  sounding here" from stem loudness, and a song of isolated hits with gaps
+  between them looks like silence. If filtering would remove more than 40% of
+  the chart it is abandoned entirely and the ungated chart is kept, on the
+  grounds that deleting most of a song is worse than a few phantom notes. You
+  will see a warning when that happens.
 
 ### Alignment
 

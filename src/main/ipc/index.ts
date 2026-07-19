@@ -15,6 +15,7 @@ import { BrowserWindow, ipcMain } from "electron";
 import * as midi from "../services/midi-service.js";
 import * as library from "../services/library-service.js";
 import * as results from "../services/results-service.js";
+import * as transcription from "../services/transcription-service.js";
 import { pickAudioFile, pickMidiFile } from "../dialogs.js";
 import { logger } from "../logger.js";
 import type { JudgmentBreakdown, DrumType } from "../../shared/types.js";
@@ -78,6 +79,22 @@ export function registerHandlers(): void {
       audioPath: asString(obj.audioPath, "audioPath"),
       midiPath: asString(obj.midiPath, "midiPath"),
       name: typeof obj.name === "string" ? obj.name : undefined,
+      chartSource: obj.chartSource === "transcribed" ? "transcribed" : "midi",
+      analysisAudioPath:
+        typeof obj.analysisAudioPath === "string" ? obj.analysisAudioPath : undefined,
+    });
+  });
+
+  // Is the Python toolchain present? The renderer asks before offering the
+  // feature, so an unset-up machine gets an explanation instead of a failure.
+  ipcMain.handle("songs:canTranscribe", () => transcription.findToolchain() !== null);
+
+  ipcMain.handle("songs:transcribeFromAudio", async (event, arg: unknown) => {
+    const audioPath = asString(asRecord(arg).audioPath, "audioPath");
+    return transcription.transcribeFromAudio(audioPath, (stage) => {
+      // Progress goes to the requesting window only — this is one user's job,
+      // not app-wide state.
+      if (!event.sender.isDestroyed()) event.sender.send("songs:transcribeProgress", stage);
     });
   });
 

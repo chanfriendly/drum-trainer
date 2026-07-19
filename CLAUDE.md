@@ -161,6 +161,9 @@ first paint flashes light.
 | `songs:delete` | invoke | `(id)` → `{ok}` |
 | `songs:setAlignment` | invoke | `({id, alignment})` → `SongMeta` |
 | `songs:setAnalysisAudio` | invoke | `({id, path \| null})` → `SongMeta` |
+| `songs:canTranscribe` | invoke | → `boolean` (is the Python toolchain present) |
+| `songs:transcribeFromAudio` | invoke | `({audioPath})` → `TranscriptionResult` |
+| `songs:transcribeProgress` | broadcast | → stage string (to the requesting window) |
 | `dialog:pickAudio` / `dialog:pickMidi` | invoke | → `string \| null` |
 | `results:list` | invoke | `(songId)` → `SongResult[]` |
 | `results:save` | invoke | `(input)` → `SongResult` |
@@ -237,8 +240,18 @@ becomes a Promise in a string position and fails at runtime, not compile time.
 
 1. **Never compare backend MIDI timestamps to `audioEl.currentTime`.** They
    have no shared origin; latency belongs in the calibration offset.
-2. **Never generate chart notes from audio.** The MIDI file is the only source.
-   A fallback that "helpfully" infers notes makes every score meaningless.
+2. **Never generate chart notes from audio *implicitly*.** The MIDI file is the
+   only source the app charts from. A fallback that "helpfully" infers notes
+   when a MIDI is missing or unparseable makes every score meaningless and
+   nobody can tell — that is what this forbids, and it still does.
+
+   **Explicit transcription is allowed and exists** (`scripts/transcribe/`,
+   surfaced as "Audio only…" in the Library). It is safe only while all three
+   hold, so do not erode them: it is **never** a fallback — a failed MIDI
+   import stays a failed import; the player **asks** for it and waits; and the
+   song is stored `chartSource: "transcribed"` and badged **Generated**
+   wherever it appears, because a score against guessed notes is practice, not
+   a record. Charting still reads a `.mid`; transcription only produces one.
 3. **Never score an unmapped MIDI note as a miss.** Exclude it from totals.
 4. **Never bundle `@julusian/midi`.** It breaks only in the packaged app, which
    is the most expensive place to find it.

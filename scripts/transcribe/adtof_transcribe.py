@@ -195,14 +195,39 @@ def main():
 
         dropped = 0
         if silent is not None and len(silent):
-            kept = []
-            for n in notes:
-                slot = int(n["time"] / hop_sec)
-                if 0 <= slot < len(silent) and silent[slot]:
-                    dropped += 1
-                    continue
-                kept.append(n)
-            notes = kept
+
+            def silent_around(t):
+                """Is the stem silent ACROSS a hit's whole decay, not just at its
+                onset?
+
+                Checking only the window containing the onset deletes real notes:
+                a 100ms RMS window averages a transient down, and a hit landing
+                late in its window barely registers. Measured on the sparse
+                practice-groove chart, the naive version gated out 200 of 262
+                notes — the gaps between isolated hits read as silence. A dense
+                song hides this completely, because neighbouring hits keep every
+                window loud.
+                """
+                lo = max(0, int((t - 0.05) / hop_sec))
+                hi = min(len(silent) - 1, int((t + 0.15) / hop_sec))
+                return lo <= hi and bool(silent[lo : hi + 1].all())
+
+            kept = [n for n in notes if not silent_around(n["time"])]
+            dropped = len(notes) - len(kept)
+
+            # A stem that disagrees with the mix this violently is not a stem of
+            # this recording — wrong file, failed separation, or an instrumental.
+            # Gating on it would silently delete most of the chart, which is far
+            # worse than the phantom notes gating exists to remove.
+            if dropped > 0.4 * len(notes):
+                print(
+                    f"WARNING: gating would drop {dropped}/{len(notes)} notes; the stem "
+                    "does not match this audio. Keeping the ungated chart.",
+                    file=sys.stderr,
+                )
+                dropped = 0
+            else:
+                notes = kept
 
         out = os.path.join(args.outdir, name[: -len(".txt")] + ".candidate.json")
         with open(out, "w") as f:

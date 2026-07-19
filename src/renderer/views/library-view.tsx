@@ -8,10 +8,19 @@
  *    as gibberish and the player needs to know that before blaming their playing
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MusicIcon, PlayIcon, PlusIcon, SettingsIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
+import {
+  MusicIcon,
+  PlayIcon,
+  PlusIcon,
+  SettingsIcon,
+  SlidersHorizontalIcon,
+  SparklesIcon,
+  Trash2Icon,
+  WandSparklesIcon,
+} from "lucide-react";
 
 import type { Difficulty, SongMeta, SongResult } from "../../shared/types.js";
 import {
@@ -74,6 +83,55 @@ export function LibraryView() {
     void queryClient.invalidateQueries({ queryKey: ["songs"] });
     void queryClient.invalidateQueries({ queryKey: ["best-results"] });
   };
+
+  // Whether to offer chart generation at all. The toolchain is a ~2GB external
+  // Python install, so on a machine without it the button must not exist rather
+  // than fail when pressed.
+  const canTranscribe = useQuery({
+    queryKey: ["songs:canTranscribe"],
+    queryFn: () => window.drumTrainer.songs.canTranscribe(),
+  });
+
+  const [transcribeStage, setTranscribeStage] = useState<string | null>(null);
+  useEffect(() => window.drumTrainer.songs.onTranscribeProgress(setTranscribeStage), []);
+
+  /**
+   * Audio only: generate the chart, import it, and go straight to Sync.
+   *
+   * The chart is recorded as `transcribed` so nothing downstream can present
+   * guessed notes as if they were a real chart — see CLAUDE.md critical rule 2,
+   * which forbids INFERRING a chart silently, not doing it on request.
+   */
+  const transcribeMutation = useMutation({
+    mutationFn: async () => {
+      const audioPath = await window.drumTrainer.songs.pickAudio();
+      if (!audioPath) return null;
+      setTranscribeStage("starting…");
+      const result = await window.drumTrainer.songs.transcribeFromAudio(audioPath);
+      const meta = await window.drumTrainer.songs.import({
+        audioPath,
+        midiPath: result.midiPath,
+        chartSource: "transcribed",
+        analysisAudioPath: result.stemPath ?? undefined,
+      });
+      return { meta, result };
+    },
+    onSuccess: (payload) => {
+      setTranscribeStage(null);
+      if (!payload) return;
+      const { meta, result } = payload;
+      for (const warning of result.warnings) toast.error(warning);
+      toast.success(`Generated ${meta.noteCount} notes for “${meta.name}” — now sync it.`);
+      refresh();
+      // Straight to Sync: a fresh chart is unaligned, and an unaligned song
+      // plays as nonsense, which reads as "the transcription is broken".
+      void navigate({ to: "/sync/$songId", params: { songId: meta.id } });
+    },
+    onError: (error: Error) => {
+      setTranscribeStage(null);
+      toast.error(error.message);
+    },
+  });
 
   const importMutation = useMutation({
     mutationFn: async () => {
@@ -148,10 +206,22 @@ export function LibraryView() {
               </p>
             </div>
           </InfoTip>
+          {canTranscribe.data && (
+            <Button
+              onClick={() => transcribeMutation.mutate()}
+              disabled={transcribeMutation.isPending || importMutation.isPending}
+              title="Only have the audio? Generate a drum chart from it."
+            >
+              <WandSparklesIcon className="size-4" />
+              {transcribeMutation.isPending
+                ? (transcribeStage ?? "Working…")
+                : "Audio only…"}
+            </Button>
+          )}
           <Button
             variant="accent"
             onClick={() => importMutation.mutate()}
-            disabled={importMutation.isPending}
+            disabled={importMutation.isPending || transcribeMutation.isPending}
           >
             <PlusIcon className="size-4" />
             {importMutation.isPending ? "Importing…" : "Import Song"}
@@ -172,12 +242,29 @@ export function LibraryView() {
           <EmptyState
             icon={<MusicIcon className="size-10" />}
             title="No songs yet"
-            description="A song is an audio file plus a MIDI file containing its drum track. Import a pair to start training."
+            description={
+              canTranscribe.data
+                ? "A song is an audio file plus a MIDI file containing its drum track. Only have the audio? Generate a chart from it — good, not perfect."
+                : "A song is an audio file plus a MIDI file containing its drum track. Import a pair to start training."
+            }
             action={
-              <Button variant="accent" onClick={() => importMutation.mutate()}>
-                <PlusIcon className="size-4" />
-                Import Song
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="accent" onClick={() => importMutation.mutate()}>
+                  <PlusIcon className="size-4" />
+                  Import Song
+                </Button>
+                {canTranscribe.data && (
+                  <Button
+                    onClick={() => transcribeMutation.mutate()}
+                    disabled={transcribeMutation.isPending}
+                  >
+                    <WandSparklesIcon className="size-4" />
+                    {transcribeMutation.isPending
+                      ? (transcribeStage ?? "Working…")
+                      : "Audio only…"}
+                  </Button>
+                )}
+              </div>
             }
           />
         ) : (
@@ -243,6 +330,17 @@ function SongRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate font-medium">{song.name}</span>
           <Badge color={DIFFICULTY_COLOR[song.difficulty]}>{song.difficulty}</Badge>
+          {song.chartSource === "transcribed" && (
+            // Never let a generated chart pass as a real one. Scoring against
+            // guessed notes is fine as practice and misleading as a record.
+            <Badge
+              color="#a855f7"
+              title="These notes were generated from the audio, not read from a MIDI file. Expect missing hi-hats and some wrong cymbals — treat scores as practice, not truth."
+            >
+              <SparklesIcon className="mr-1 inline size-3" />
+              Generated
+            </Badge>
+          )}
           {!synced && (
             // Clickable: a warning the player can't act on is just nagging.
             <button onClick={onSync} className="titlebar-no-drag">

@@ -127,6 +127,20 @@ export interface SongMeta {
    * served over `song-audio://` like the main audio. Null = analyse the mix.
    */
   analysisAudioFile: string | null;
+  /**
+   * Where this song's notes came from.
+   *
+   * `"midi"` — a MIDI file the player supplied. `"transcribed"` — generated
+   * from the audio by the offline model.
+   *
+   * This exists so the app can never be quiet about it. Charting from audio is
+   * forbidden as a silent FALLBACK (CLAUDE.md critical rule 2) because a score
+   * against invented notes is meaningless; an explicitly requested
+   * transcription is fine, but only while every screen can still say the notes
+   * are a guess. Songs written before this field default to `"midi"`, which is
+   * true of all of them.
+   */
+  chartSource: "midi" | "transcribed";
 }
 
 export interface SongWithChart extends SongMeta {
@@ -137,6 +151,22 @@ export interface ImportSongInput {
   audioPath: string;
   midiPath: string;
   name?: string;
+  /** Defaults to "midi". Set by the transcription flow. */
+  chartSource?: "midi" | "transcribed";
+  /** Optional drum stem to attach as Sync's analysis audio at import time. */
+  analysisAudioPath?: string;
+}
+
+/** What a chart-generation run produced. Crosses IPC, so it lives here. */
+export interface TranscriptionResult {
+  midiPath: string;
+  /** Isolated drum stem, when one was produced — Sync analyses this. */
+  stemPath: string | null;
+  noteCount: number;
+  /** False when no stem was available, so phantom notes were not filtered. */
+  gated: boolean;
+  /** Human-readable caveats to surface, e.g. an ungated chart. */
+  warnings: string[];
 }
 
 // ── Results ───────────────────────────────────────────────────────────

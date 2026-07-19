@@ -5,6 +5,48 @@ Most recent first.
 
 ---
 
+### 2026-07-19 (last): chart generation in the app
+
+**"Audio only…" in the Library**: pick a song's audio, and the app separates the
+drums, transcribes them, imports the result and lands on Sync — about a minute.
+`scripts/transcribe/chart_from_audio.py` is the pipeline (it encodes the three
+measured rules: transcribe the mix, gate with a stem, crash=0.55);
+`transcription-service.ts` spawns it and streams stage lines to the window that
+asked.
+
+**This narrows critical rule 2 rather than breaking it, and CLAUDE.md now says
+so explicitly.** The rule forbids *implicitly* inventing notes — a fallback for
+a missing MIDI, where a meaningless score is indistinguishable from a real one.
+Transcription here is never a fallback (a failed MIDI import stays failed), is
+always asked for, and every generated song is stored `chartSource:
+"transcribed"` and badged **Generated** wherever it appears. The app still
+charts from a `.mid`; this only produces one.
+
+**Demucs instead of driving Logic Pro.** The suggestion on the table was to
+automate Logic's Stem Splitter. Logic has no scripting API for it, so that means
+GUI automation — breaks on every Logic update, needs the app frontmost, cannot
+run headless. Logic's splitter is Demucs-derived anyway, so the library gets
+equivalent stems and is scriptable. Measured equivalent on drop dead: demucs
+gating produced 1,131 notes against the Fadr stem's 1,133, and its stricter
+separation put the first note at 58.5s, matching the original stem exactly.
+
+**The toolchain is external, not bundled** — the venv is ~1.9GB against a 115MB
+app. `findToolchain()` locates it, `songs:canTranscribe` reports presence, and
+the button does not exist on a machine without it. Absence produces setup
+instructions, never a stack trace.
+
+**A bug this found, which would have quietly ruined sparse songs.** The first
+gate checked only the 100ms window containing a note's onset. A 100ms RMS
+average flattens a transient, and a hit landing late in its window barely
+registers — so on practice-groove it deleted **200 of 262 notes**. Dense songs
+hide this completely, because neighbouring hits keep every window loud, which is
+why drop dead looked fine. Two fixes: check the window spanning a hit's decay
+(−50ms to +150ms) rather than a single slot, and **abandon gating entirely if it
+would remove more than 40% of the chart** — a stem that disagrees that violently
+is the wrong file or a failed separation, and deleting most of a song is far
+worse than the phantom notes gating exists to remove. Verified both ways: the
+sparse song keeps all 262 with a warning, the dense song still gates 1202 → 1140.
+
 ### 2026-07-19 (late): the full mix's two costs, both fixed
 
 Playing a mix-transcribed chart surfaced exactly the two failures the Red
