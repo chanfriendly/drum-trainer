@@ -5,6 +5,45 @@ Most recent first.
 
 ---
 
+### 2026-07-19 (late): the full mix's two costs, both fixed
+
+Playing a mix-transcribed chart surfaced exactly the two failures the Red
+measurements predicted, in the order of how audible they are.
+
+**"Phantom kick drums at the beginning."** On a stem, silence yields no notes;
+on a mix, bass and vocals sit in the kick band and the model charts them.
+Measured on *drop dead*: first charted note at **11.44s, drums do not enter
+until 30.0s** — 12 phantom kicks over an intro with nothing else to play, which
+is why it was the first thing noticed. New `--gate-with <drum stem>` drops notes
+where the stem is silent (threshold relative to the stem's own 90th-percentile
+RMS, so it travels between songs). First note moved to 43.1s, 27 notes dropped,
+7 hi-hats lost. The `.mid` is rewritten after gating — `predictFolder`'s copy is
+the ungated one, and shipping that would have made the fix invisible.
+
+**"Parts where it drops a consistent crash cymbal."** The cymbal threshold is
+tuned for stems. Swept against Red's human chart:
+
+| `crash=` | crash precision | crash F1 | overall F1 |
+| --- | --- | --- | --- |
+| 0.30 (default) | 23.2% | 35.5% | 70.3% |
+| 0.40 | 36.2% | 48.3% | 71.3% |
+| **0.55** | **54.1%** | **60.6%** | **71.8%** |
+| 0.70 | 50.0% | 6.5% | 71.3% |
+
+0.55 is a genuine optimum rather than a point on a slope — 0.70 collapses crash
+recall to 3.4%, so the cliff is close and nobody should push past it. Exposed as
+`--threshold CLASS=VALUE` (the model's per-class thresholds were already in
+hparams). **Tuned on one song**; recorded as a default, not a law.
+
+Recommended invocation is now: transcribe the mix, `--gate-with` the stem,
+`--threshold crash=0.55`.
+
+**README rewritten** with a **Known issues** section covering all of it —
+transcription quality, the alignment ambiguity (including that 87% of preview
+clicks still land when a full beat wrong, so the ear cannot always settle it),
+unmapped notes, same-lane collisions, and packaging. Stale test count fixed
+(65 → 93) and the transcription pipeline documented as a third source of charts.
+
 ### 2026-07-19 (night): transcribe the mix, align the stem
 
 **The intuition was backwards, and one harness run showed it.** The reasoning

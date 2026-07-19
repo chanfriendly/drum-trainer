@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -37,10 +38,83 @@ os.environ.setdefault("TF_USE_LEGACY_KERAS", "True")
 ADTOF_TO_LANE = {35: "kick", 38: "snare", 47: "tom", 42: "hihat", 49: "crash"}
 
 
+LANE_TO_GM = {lane: note for note, lane in ADTOF_TO_LANE.items()}
+
+
+def write_midi(notes, path):
+    """Rewrite the .mid after gating — predictFolder's copy is the ungated one.
+
+    `is_drum=True` puts it on GM channel 10, which is what the app's parseChart
+    looks for; a chart written to any other channel imports as an empty song.
+    """
+    import pretty_midi
+
+    pm = pretty_midi.PrettyMIDI()
+    inst = pretty_midi.Instrument(program=0, is_drum=True, name="drums")
+    for n in notes:
+        inst.notes.append(
+            pretty_midi.Note(
+                velocity=100, pitch=LANE_TO_GM[n["drum"]], start=n["time"], end=n["time"] + 0.05
+            )
+        )
+    pm.instruments.append(inst)
+    pm.write(path)
+
+
+def load_mono(path, sr=22050):
+    """Decode to mono float32 via ffmpeg. Only used for --gate-with."""
+    import numpy as np
+
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        sys.exit(f"ffmpeg failed on {path}:\n{proc.stderr.decode()[:300]}")
+    return np.frombuffer(proc.stdout, dtype=np.float32), sr
+
+
+def silent_mask(stem_path, hop_sec=0.1):
+    """Per-`hop_sec` mask of where the drum stem carries no drum at all.
+
+    Threshold is relative to the stem's OWN loud passages (2% of its 90th
+    percentile RMS), so it travels across songs and masterings instead of
+    encoding one track's level.
+    """
+    import numpy as np
+
+    audio, sr = load_mono(stem_path)
+    hop = int(hop_sec * sr)
+    if hop <= 0 or len(audio) < hop:
+        return np.zeros(0, dtype=bool), hop_sec
+    rms = np.array(
+        [np.sqrt((audio[i : i + hop] ** 2).mean()) for i in range(0, len(audio) - hop, hop)]
+    )
+    return rms < 0.02 * np.percentile(rms, 90), hop_sec
+
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("audio", help="audio file (or folder of audio files)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__,
+    )
+    ap.add_argument("audio", help="audio file (or folder of audio files) — prefer the FULL MIX")
     ap.add_argument("outdir", help="output folder for .mid / .txt / .candidate.json")
+    ap.add_argument(
+        "--gate-with",
+        metavar="STEM",
+        help="drum stem for the same recording. Notes landing where the stem is "
+        "silent are dropped: transcribing the full mix hallucinates drums in "
+        "intros and breakdowns, because bass and vocals sit in the kick band.",
+    )
+    ap.add_argument(
+        "--threshold",
+        action="append",
+        default=[],
+        metavar="CLASS=VALUE",
+        help="override a class's peak-picking threshold, e.g. --threshold crash=0.45. "
+        "Higher = fewer, more confident notes. Classes: kick snare tom hihat crash.",
+    )
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -49,6 +123,20 @@ def main():
     model, hparams = Model.modelFactory(modelName="Frame_RNN", scenario="adtofAll", fold=0)
     if not model.weightLoadedFlag:
         sys.exit("pretrained weights failed to load — expected Frame_RNN_adtofAll_0 in adtof/models/")
+
+    # Per-class peak-picking thresholds, in the model's own label order. Raising
+    # one trades recall for precision in that lane only — the cymbal class is the
+    # one worth touching, because a full mix puts guitar and vocal energy exactly
+    # where crashes live.
+    lane_index = {lane: i for i, lane in enumerate(ADTOF_TO_LANE[n] for n in hparams["labels"])}
+    thresholds = list(hparams["peakThreshold"])
+    for override in args.threshold:
+        lane, _, value = override.partition("=")
+        if lane not in lane_index:
+            sys.exit(f"unknown class {lane!r}; expected one of {', '.join(lane_index)}")
+        thresholds[lane_index[lane]] = float(value)
+        print(f"threshold {lane}: {hparams['peakThreshold'][lane_index[lane]]:.2f} -> {value}")
+    hparams["peakThreshold"] = thresholds
 
     os.makedirs(args.outdir, exist_ok=True)
 
@@ -92,6 +180,8 @@ def main():
         if staging:
             shutil.rmtree(staging, ignore_errors=True)
 
+    silent, hop_sec = (silent_mask(args.gate_with) if args.gate_with else (None, 0.1))
+
     # predictFolder writes "<title>.txt" lines of "<time>\t<adtof-pitch>";
     # convert each to the harness candidate format.
     for name in os.listdir(args.outdir):
@@ -102,10 +192,24 @@ def main():
             for line in f:
                 t, pitch = line.split()
                 notes.append({"time": float(t), "drum": ADTOF_TO_LANE[int(float(pitch))]})
+
+        dropped = 0
+        if silent is not None and len(silent):
+            kept = []
+            for n in notes:
+                slot = int(n["time"] / hop_sec)
+                if 0 <= slot < len(silent) and silent[slot]:
+                    dropped += 1
+                    continue
+                kept.append(n)
+            notes = kept
+
         out = os.path.join(args.outdir, name[: -len(".txt")] + ".candidate.json")
         with open(out, "w") as f:
             json.dump(notes, f)
-        print(f"{out}: {len(notes)} notes")
+        if dropped:
+            write_midi(notes, os.path.join(args.outdir, name[: -len(".txt")] + ".mid"))
+        print(f"{out}: {len(notes)} notes" + (f" ({dropped} gated out)" if dropped else ""))
 
 
 if __name__ == "__main__":

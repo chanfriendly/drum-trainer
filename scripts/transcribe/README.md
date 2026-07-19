@@ -10,12 +10,19 @@ consumes.
 /opt/homebrew/bin/python3.11 -m venv .venv-adt
 .venv-adt/bin/pip install "git+https://github.com/MZehren/ADTOF" tf_keras
 
-# transcribe a drum stem
-.venv-adt/bin/python scripts/transcribe/adtof_transcribe.py "Drums - Song.mp3" out/
-# → out/Drums - Song.mp3.mid            import this into the app
+# the recommended invocation: transcribe the MIX, gate with the STEM
+.venv-adt/bin/python scripts/transcribe/adtof_transcribe.py "Song.flac" out/ \
+    --gate-with "Drums - Song.mp3" \
+    --threshold crash=0.55
+# → out/Song.flac.mid                   import this into the app
 # → out/….candidate.json                feed this to the eval harness
 # → out/….txt                           raw (time, class) pairs
 ```
+
+Both flags fix a measured failure and both are worth passing by default:
+`--gate-with` drops notes where the drum stem is silent (a full mix invents
+drums in intros), and `--threshold crash=0.55` roughly halves cymbal false
+positives. Details in **Known limits** below.
 
 Model weights ship inside the pip package (~10MB checkpoint) — no separate
 download, no GPU needed. A 3½-minute song transcribes in well under a minute on
@@ -73,6 +80,26 @@ the stem in Sync.
 
 ## Known limits — read before trusting a chart
 
+- **A full mix invents drums where there are none.** On a stem, silence means
+  no notes; on a mix, bass and vocals sit in the kick band and the model charts
+  them. Measured on *drop dead*: the first charted note landed at **11.4s when
+  the drums do not enter until 30s** — audible as phantom kicks over the intro.
+  `--gate-with <drum stem>` drops notes where the stem is silent; on that song
+  it moved the first note to 43.1s and removed 27 notes overall, costing 7
+  hi-hats.
+- **Cymbals over-trigger on a mix.** The default cymbal threshold (0.30) is
+  tuned for stems. Swept against Red's human chart:
+
+  | `--threshold crash=` | crash precision | crash F1 | overall F1 |
+  | --- | --- | --- | --- |
+  | 0.30 (default) | 23.2% | 35.5% | 70.3% |
+  | 0.40 | 36.2% | 48.3% | 71.3% |
+  | **0.55** | **54.1%** | **60.6%** | **71.8%** |
+  | 0.70 | 50.0% | 6.5% ← collapses | 71.3% |
+
+  0.55 is a real optimum, not a point on a slope — at 0.70 crash recall falls
+  off a cliff to 3.4% and real crashes vanish. **Tuned on one song**, so treat
+  it as a good default rather than a constant of nature.
 - **One cymbal class.** Everything cymbal-ish becomes note 49 (crash). No
   crash/ride distinction, no open/closed hat.
 - **Toms over-trigger** (precision ~23%).

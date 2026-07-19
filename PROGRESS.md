@@ -10,9 +10,11 @@ part is the one thing no amount of local testing could establish, and it is now
 done: the user played a song through with their e-kit and it worked.
 
 - Repo: **https://github.com/chanfriendly/drum-trainer** (public, MIT).
+  **Local commits are AHEAD of the remote** — nothing since 2026-07-18 has been
+  pushed. Ask before pushing.
 - All five spec'd screens exist, plus **Sync**, which the spec did not anticipate
   but the problem demanded. No placeholders.
-- 74 tests. Type-clean. Packages to an installable `.dmg` with an icon.
+- 93 tests. Type-clean. Packages to an installable `.dmg` with an icon.
 - Measured end-to-end MIDI jitter: **±4ms**, comfortably inside the ±25ms Perfect
   window. The plumbing is precise enough to judge drumming.
 
@@ -214,17 +216,14 @@ practice-groove kit is pleasant to drum against.
 
 Prioritised. The top item is the real project now.
 
-1. **Play the full-mix charts on the kit and judge the hi-hats.** Transcribing
-   the MIX instead of the stem lifted hi-hat recall 34% → 52% (overall F1 66.4%
-   → 70.3%) — the exact weakness that was in question. Regenerated charts are
-   in `~/Downloads/adtof-charts/` marked `(drums, from mix)`. Import
-   **drop dead (from mix)** with the full-mix FLAC as audio, attach the drum
-   stem in Sync, and play. The open question is unchanged and now answerable:
-   do the hats read as "sparse but fair" or "broken"? Two cheap paths are
-   already closed — other checkpoints (only one ships) and full-mix input for
-   *Hounds of Love* (still 67% toms; that collapse is a training-domain
-   problem). If hats still feel wrong, the remaining lever is the superseded
-   separation plan in `scripts/eval/README.md`, which must now beat 70.3%.
+1. **Play the v2 charts and judge the hi-hats.** `~/Downloads/adtof-charts/`
+   now holds `(drums, v2 gated)` files — mix-transcribed, stem-gated, crash
+   threshold 0.55. These fix the two things heard on the first mix chart:
+   phantom kicks in the intro (first note 11.4s → 43.1s on drop dead) and
+   over-triggered crashes (89 → 47). Import **drop dead v2** with the full-mix
+   FLAC as audio, attach the drum stem in Sync, play. Remaining question is
+   unchanged: are the hi-hats "sparse but fair" or "broken"? Do not judge on
+   Hounds of Love — still 67% toms, a known-bad case.
 2. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a
