@@ -151,30 +151,31 @@ practice-groove kit is pleasant to drum against.
 
 Prioritised. The top item is the real project now.
 
-1. **Kit session: play an ADTOF chart, and ear-check Red's alignment.** Two
-   things only ears can settle:
-   - Import a chart from `~/Downloads/adtof-charts/` with its stem as audio,
-     Sync it, play it. Does 34% hi-hat recall read as "sparse but fair" or
-     "broken"? If hats are the dealbreaker, the fallback is the superseded
-     separation plan in `scripts/eval/README.md` — which now must beat 66.4%.
-   - **Red's saved alignment is probably one beat off.** It is `source: "auto"`
-     from the full mix (−1969ms), never ear-confirmed, and three independent
-     measurements corroborate ≈−1501ms instead (see 2026-07-18 evening entry in
-     CHANGELOG). Open Sync → Preview; if the clicks sit just off the drums,
-     **+1 beat** (button added for exactly this) should snap them on. Which
-     offset your ear picks is also the ground truth the estimator work below
-     needs.
-2. **Investigate the alignment scorer — it ranks the corroborated offset 16/17.**
-   Measured in the running app on the Red stem: `analyzeAlignment`'s candidate
-   f1 scores the likely-true offset (−1482ms, "+8 beats") at 0.585 while every
-   beat-shifted wrong candidate scores ~0.62, and the whole list is flat
-   (0.59–0.63) where the Python harness's z-score lock separates sharply
-   (3.04 vs 0.65). Same envelope, same song, opposite verdicts — suspect the
-   f1 tolerance/matching flattens the peak. The eval README's banded-DTW note
-   is the bigger fix in the same area. Also noticed: bar/beat nudges are sized
-   in chart seconds but applied to the audio-time offset without × tempoScale
-   (~31ms error per bar at 0.984) — harmless while the 10ms nudge exists, but
-   fix it in passing.
+1. **Fix the estimator's offset ranking — there is now a clean oracle for it.**
+   An ADTOF chart played against the stem it was transcribed FROM has
+   known-exact alignment (offset 0, scale 1), on REAL audio. Two such pairs
+   exist and they split:
+   - Hounds of Love → estimator says 0.003s / 80% "clear winner". **Correct.**
+   - drop dead → estimator says 1.844s / 68% "too close to call". **Wrong.**
+
+   Tempo scale is right in both; only offset ranking fails. **First hypothesis:
+   drop dead has 58s of near-silence before the drums enter** (RMS 0.0003 until
+   second 58; first chart note 58.520s), which would skew the standardized
+   envelope's mean/stdev — try normalising over the charted span, or excluding
+   silent regions. Related and still open: on Red the estimator ranked the
+   correct offset near LAST of 17 (see CHANGELOG 2026-07-19). The eval README's
+   banded-DTW note is the bigger fix in the same area.
+2. **Set Red's alignment to −1501ms.** Established by symbolic matching (96.4%
+   chart↔transcription agreement vs 87.4% at the currently saved −3418ms) —
+   see CHANGELOG 2026-07-19. From the saved value that is four **+1 beat**
+   nudges now that nudges are tempo-scaled. Worth doing before any kit session,
+   because everything played on Red until then is judged against a wrong chart.
+3. **Play an ADTOF chart on the kit.** Use **drop dead** — its transcription
+   distribution is plausible (kick 30% / hihat 33% / snare 25%). Do NOT judge
+   the pipeline on Hounds of Love: that chart is 62% toms with zero hi-hats and
+   zero cymbals, i.e. a transcription failure, and the user already heard it as
+   wrong while its alignment was provably perfect. The open question is still
+   whether 34% hi-hat recall reads as "sparse but fair" or "broken".
 3. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
@@ -192,8 +193,15 @@ Prioritised. The top item is the real project now.
   unproven is whether such a chart *feels* playable on the kit — that is now
   the top "What's next" item.
 - **Judgment "feel"** needs the kit and the user's ears; no test can establish
-  it. Largely unblocked now that the kit works, but the Sync preview's clicks
-  and the practice-groove kit sound are still unjudged.
+  it. Largely unblocked now that the kit works, and the Sync preview's clicks
+  are now confirmed audible (2026-07-19).
+
+  **But the ear has a measured limit, learned 2026-07-19: it cannot settle
+  bar/beat ambiguity on dense material.** At an offset a full beat wrong, 87.7%
+  of Red's clicks still land on a real drum, and the wrong alignment was
+  reported as sounding aligned — correctly, because that is what is audible.
+  Where symbolic ground truth exists, decide with it and use the ear to
+  confirm. The ear remains the only oracle for *feel*.
 - **Notarization** remains out of scope. The `.dmg` is unsigned; first launch
   needs a right-click → Open.
 

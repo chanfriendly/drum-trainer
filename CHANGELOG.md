@@ -5,6 +5,68 @@ Most recent first.
 
 ---
 
+### 2026-07-19: Red's true offset settled; a free oracle for the estimator; the ear test has a limit
+
+**Red's correct offset is −1501ms, and it is now established without any audio
+envelope.** Matched the human 1,944-note chart against ADTOF's independent
+transcription of the drum stem — two note lists, no correlation, no envelope,
+fully independent provenance:
+
+| offset | chart↔transcription agreement |
+| --- | --- |
+| **−1501ms** | **96.4%** |
+| −1969ms (the mix estimate) | 87.7% |
+| −3418ms (what was saved) | 87.4% |
+
+Sharp peak: ±10ms around −1501 stays at ~96%. This supersedes the earlier
+hedged claim; the renderer's estimator had it in the candidate list all along
+and ranked it near last.
+
+**Why the ear could not settle it — a real limit on this project's oracle.**
+At an offset a whole beat wrong, **87.7% of clicks still land on a real drum**,
+because kick/snare in dense pop sit on a regular grid. The user reported the
+wrong alignment as sounding aligned, and that was a correct report of what is
+audible. *The ear is authoritative for feel but NOT for bar/beat ambiguity on
+dense material.* Where symbolic ground truth exists, prefer it and use the ear
+to confirm, not to decide.
+
+**A free oracle arrived, unplanned.** An ADTOF chart played against the stem it
+was transcribed FROM has known-exact alignment (offset 0, scale 1) — the same
+property practice-groove was built for, but on real audio. Two such pairs now
+exist, and they disagree in a diagnostic way:
+
+| pair | estimator said | truth | verdict |
+| --- | --- | --- | --- |
+| Hounds of Love | 0.003s / 100.010% / 80%, "one clear winner" | 0 / 1 | **correct** |
+| drop dead | 1.844s / 100.010% / 68%, "too close to call" | 0 / 1 | **wrong by 1.844s** |
+
+So the estimator is not uniformly broken — it nails one and misses the other.
+The salient difference: **drop dead has 58s of near-silence before the drums
+enter** (measured: RMS 0.0003 until second 58, chart's first note 58.520s),
+which would skew a standardized envelope's mean and stdev. That is the first
+hypothesis to test, and the tempo scale was right in both cases — it is
+specifically offset ranking that fails.
+
+**The ADTOF charts themselves fail in the opposite direction from each other**,
+which is the more useful finding for the transcription workstream:
+
+- **drop dead**: plausible distribution (kick 30%, hihat 33%, snare 25%,
+  cymbal 6%, tom 6%). Transcription looks sane; alignment is what broke.
+- **Hounds of Love**: **62% toms (575 of 923), zero hi-hats, zero cymbals.**
+  Not credible for any pop record. ADTOF collapsed the kit. The user heard this
+  as "doesn't sound right" while the alignment was provably perfect — the ear
+  was right, and it was diagnosing transcription, not sync.
+
+Both are consistent with the measured weakness: ADTOF under-charts hats
+(34% recall) and this is what that looks like at its worst, on a 1985
+Fairlight/gated-drum production well outside its rock-game training domain.
+
+**Fixed:** bar/beat nudges are now scaled into audio time (`× tempoScale`).
+They were sized from `song.bpm` in chart seconds while `offsetMs` shifts along
+the audio. On Red the error compounds: four beat-nudges landed 34ms off the
+correct offset and *no* combination of buttons could reach it. Scaled, four
+beat-nudges land within 3ms.
+
 ### 2026-07-18 (night): Sync-against-stem shipped; the estimator has a ranking problem
 
 **Feature.** A song can carry an optional isolated drum stem
