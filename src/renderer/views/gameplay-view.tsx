@@ -33,6 +33,7 @@ import type {
 } from "../../shared/types.js";
 import { Button, useToast } from "../components/ui.js";
 import { DRUM_COLORS, DRUM_COLORS_DIM, DRUM_LABELS, DRUM_TYPES } from "../lib/drums.js";
+import { drawDrumIcon } from "../lib/drum-icons.js";
 import { chartTimeToAudioTime } from "../lib/alignment.js";
 import { songAudioUrl } from "../lib/audio.js";
 import { loadSettings } from "../lib/settings.js";
@@ -397,6 +398,28 @@ function GameplayCanvas({ song }: { song: SongWithChart }) {
         ctx.fillStyle = DRUM_COLORS[dt] + toHexAlpha(alpha * 0.25);
         ctx.fillRect(x, 0, laneW, H);
       }
+    });
+
+    /**
+     * Kit icons, as lane watermarks.
+     *
+     * Placed up the lane rather than by the label because that is where the eye
+     * already is while tracking falling notes — the point is to learn which
+     * lane is which without looking away. Alpha is deliberately low: a note
+     * crossing an icon must remain the brightest thing in the lane, so this is
+     * a hint, never a graphic.
+     */
+    const iconSize = Math.min(laneW * 0.52, H * 0.16);
+    DRUM_TYPES.forEach((dt, i) => {
+      drawDrumIcon(
+        ctx,
+        dt,
+        i * laneW + laneW / 2,
+        H * 0.42,
+        iconSize,
+        DRUM_COLORS[dt],
+        0.13,
+      );
     });
 
     ctx.fillStyle = "rgba(255,255,255,0.25)";

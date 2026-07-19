@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+### 2026-07-19: kit icons in the lanes
+
+Each lane now carries a line-art icon of its drum, up the lane where the eye
+already is while tracking falling notes — the point is learning which lane is
+which *without* looking away, which a label at the bottom edge cannot do.
+
+**Vector, not PNG**, and the reasons are practical rather than aesthetic: the
+icon takes the lane's own colour, sits at whatever alpha keeps notes legible,
+and stays sharp at any lane width on any display. Raster assets would need a
+set per colour and per scale and would add binaries to the repo. Cost is about
+a dozen path operations each per frame, nothing beside the note loop.
+
+Shapes are built to differ **in silhouette**, because at 13% opacity behind
+moving notes that is all you get: crash is tilted where ride is flat, and the
+tom is a narrower, deeper drum than the snare rather than a smaller copy of it.
+The hi-hat needed a second pass — at realistic spacing its two cymbals merged
+into one blurred shape at watermark opacity, so they are thinner and further
+apart than a real closed hi-hat.
+
+Verified in the running app with notes actually falling through the icons, not
+on an empty lane: notes remain the brightest thing by a wide margin.
+
 ### 2026-07-19 (last): chart generation in the app
 
 **"Audio only…" in the Library**: pick a song's audio, and the app separates the

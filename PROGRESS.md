@@ -188,6 +188,9 @@ practice-groove kit is pleasant to drum against.
       sends that note. Settings now lists unmapped notes found in the library
       with GM names and counts, and assigns them to a lane in one click.
       Verified in the built app against the real library (89 tests).
+- [x] 2026-07-19 — **Lane kit icons** (`lib/drum-icons.ts`), drawn as canvas
+      vector art rather than PNGs so they take the lane colour and stay sharp at
+      any width. Verified with notes falling through them.
 - [x] 2026-07-19 — **Chart generation is in the app** ("Audio only…"). Pipeline
       script + `transcription-service.ts` (spawns the external venv, streams
       progress), `chartSource` provenance with a **Generated** badge, stem
