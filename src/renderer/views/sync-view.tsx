@@ -189,11 +189,26 @@ function SyncEditor({
       return;
     }
     try {
-      // Start a little before the first charted note so the lead-in is audible.
-      const firstAudioTime = (song.chart[0]?.time ?? 0) * tempoScale + offsetMs / 1000;
+      // Start a little before the first CLICKED note — not the first charted
+      // note. Those differ: the clicks are kicks and snares, but chart[0] is
+      // whatever comes first, often a hat in a count-in. On the first real song
+      // that gap was 7.6s, so the preview played most of its 12s in silence and
+      // read as "the click is broken".
+      const firstClick = beatTimes.length > 0 ? beatTimes[0] : (song.chart[0]?.time ?? 0);
+      const firstAudioTime = firstClick * tempoScale + offsetMs / 1000;
       const from = Math.max(0, firstAudioTime - 1);
       setPlaying(true);
-      await preview.current.play(song, beatTimes, { offsetMs, tempoScale }, from, 12);
+      const clicks = await preview.current.play(
+        song,
+        beatTimes,
+        { offsetMs, tempoScale },
+        from,
+        12,
+      );
+      if (clicks === 0) {
+        // Silence with no explanation is indistinguishable from a broken click.
+        toast.error("No kick or snare falls in the previewed window — nothing to click on.");
+      }
       setTimeout(() => setPlaying(false), 12_000);
     } catch (error) {
       setPlaying(false);

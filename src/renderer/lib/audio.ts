@@ -104,12 +104,23 @@ export async function loadAnalysisPcm(song: SongMeta): Promise<Float32Array> {
  * a human ear is the oracle. Scheduling is done on the Web Audio clock, which is
  * sample-accurate, rather than setTimeout.
  */
+/**
+ * The song is ducked under the clicks. A commercial master is limited to near
+ * 0dBFS, so a click mixed at unity against it is masked — and an inaudible
+ * click makes this whole screen useless, since the preview IS the verdict.
+ * Loud enough to still hear where the drums are, quiet enough to hear the tick
+ * against them.
+ */
+const PREVIEW_MUSIC_GAIN = 0.4;
+
 export class AlignmentPreview {
   private ctx: AudioContext | null = null;
   private source: AudioBufferSourceNode | null = null;
 
   /**
    * @param noteTimes Chart times, in CHART seconds (the alignment is applied here).
+   * @returns how many clicks were scheduled — zero means the caller picked a
+   *   window with nothing in it, which must not look like silence-as-success.
    */
   async play(
     song: SongMeta,
@@ -117,40 +128,62 @@ export class AlignmentPreview {
     alignment: { offsetMs: number; tempoScale: number },
     fromSeconds: number,
     durationSeconds: number,
-  ): Promise<void> {
+  ): Promise<number> {
     this.stop();
 
     const buffer = await decodeSongAudio(song);
     const ctx = new AudioContext();
     this.ctx = ctx;
 
+    const music = ctx.createGain();
+    music.gain.value = PREVIEW_MUSIC_GAIN;
+    music.connect(ctx.destination);
+
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(music);
     this.source = source;
 
     // Everything is scheduled relative to this instant on the audio clock.
     const startAt = ctx.currentTime + 0.15; // small lead so scheduling isn't late
     source.start(startAt, fromSeconds, durationSeconds);
 
+    let scheduled = 0;
     for (const chartTime of noteTimes) {
       const audioTime = chartTime * alignment.tempoScale + alignment.offsetMs / 1000;
       if (audioTime < fromSeconds || audioTime > fromSeconds + durationSeconds) continue;
       this.scheduleClick(ctx, startAt + (audioTime - fromSeconds));
+      scheduled++;
     }
+    return scheduled;
   }
 
-  /** A short bright blip — deliberately unlike a drum, so it's distinguishable. */
+  /**
+   * A short bright tick — deliberately unlike a drum, so it's distinguishable.
+   *
+   * Two partials rather than one sine: a bare 1800Hz tone sits inside the same
+   * band as hats and vocal sibilance and blends into them. The octave above
+   * gives it an edge that reads as "not part of the music".
+   */
   private scheduleClick(ctx: AudioContext, when: number): void {
-    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.frequency.value = 1800;
-    osc.connect(gain);
     gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.25, when);
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
-    osc.start(when);
-    osc.stop(when + 0.04);
+    gain.gain.setValueAtTime(0.9, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+
+    for (const [freq, level] of [
+      [1800, 1],
+      [3600, 0.5],
+    ]) {
+      const osc = ctx.createOscillator();
+      const partial = ctx.createGain();
+      partial.gain.value = level;
+      osc.frequency.value = freq;
+      osc.connect(partial);
+      partial.connect(gain);
+      osc.start(when);
+      osc.stop(when + 0.05);
+    }
   }
 
   stop(): void {
