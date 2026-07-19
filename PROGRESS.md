@@ -145,6 +145,20 @@ practice-groove kit is pleasant to drum against.
       @tonejs/midi drops it before parseChart — asserted as behavior.
 - [x] 2026-07-18 — The Red song now has its Fadr stem attached as analysis
       audio (left in place — it is the real configuration for the kit session).
+- [x] 2026-07-19 — **Sync preview made audible** (it started before the first
+      CHARTED note but clicks only on kick/snare — a 7.6s silent gap on Red —
+      and a 0.25-gain sine was masked by a limited master). Nudges now scaled
+      into audio time. Both fixes verified against real data, not just types.
+- [x] 2026-07-19 — **Red's true offset established as −1501ms** by symbolic
+      matching against ADTOF's transcription (96.4% vs 87.4% at the previously
+      saved value), and **drop dead's as 0** (confirmed by a third
+      implementation at +0.007s / lock 2.94). Both stored as `manual`.
+- [x] 2026-07-19 — Verified the **Fadr drum stem is sample-aligned with the
+      full mix** (cross-correlation: 0.00ms lag, sharp peak, identical length).
+      This was load-bearing: gameplay plays the mix while Sync now analyses the
+      stem, so a shifted stem would have silently corrupted every stem-derived
+      alignment — and both the offset and the ADTOF transcription read that
+      same stem, so a shared error would have looked like agreement.
 
 
 ## What's next
@@ -165,12 +179,7 @@ Prioritised. The top item is the real project now.
    silent regions. Related and still open: on Red the estimator ranked the
    correct offset near LAST of 17 (see CHANGELOG 2026-07-19). The eval README's
    banded-DTW note is the bigger fix in the same area.
-2. **Set Red's alignment to −1501ms.** Established by symbolic matching (96.4%
-   chart↔transcription agreement vs 87.4% at the currently saved −3418ms) —
-   see CHANGELOG 2026-07-19. From the saved value that is four **+1 beat**
-   nudges now that nudges are tempo-scaled. Worth doing before any kit session,
-   because everything played on Red until then is judged against a wrong chart.
-3. **Play an ADTOF chart on the kit.** Use **drop dead** — its transcription
+2. **Play an ADTOF chart on the kit.** Use **drop dead** — its transcription
    distribution is plausible (kick 30% / hihat 33% / snare 25%). Do NOT judge
    the pipeline on Hounds of Love: that chart is 62% toms with zero hi-hats and
    zero cymbals, i.e. a transcription failure, and the user already heard it as

@@ -61,6 +61,15 @@ Both are consistent with the measured weakness: ADTOF under-charts hats
 (34% recall) and this is what that looks like at its worst, on a 1985
 Fairlight/gated-drum production well outside its rock-game training domain.
 
+**Confirmed in play, then corrected.** The user played drop dead and reported
+fills arriving "seconds later" — the 1.844s error, felt rather than measured.
+A third implementation (the Python harness's `--auto-align`, a different
+scoring metric from the renderer's) independently returned **+0.007s, scale
+1.00000, lock 2.94 confident**, agreeing with the by-construction truth. Both
+songs' stored alignments were then set to their measured values —
+drop dead `0 / 1.0`, Red `−1501ms / 0.984`, both `source: "manual"` because
+they came from outside the estimator.
+
 **Fixed:** bar/beat nudges are now scaled into audio time (`× tempoScale`).
 They were sized from `song.bpm` in chart seconds while `offsetMs` shifts along
 the audio. On Red the error compounds: four beat-nudges landed 34ms off the
