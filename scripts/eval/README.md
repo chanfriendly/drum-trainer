@@ -221,6 +221,71 @@ separated stems bleed, so "is this snare-stem onset a snare or hat bleed?" is
 classification re-imported as thresholding. The measured case for revisiting it
 is hi-hat recall. See `scripts/transcribe/README.md` for usage and limits.
 
+## Findings on TEN human-charted songs (2026-07-19) — Red was optimistic
+
+n went from 1 to 11. The user supplied ten songs with genuine human drum MIDIs
+(Talking Heads, Prince, Biggie, Dead Kennedys, Kenny Loggins, Dixie Chicks,
+Amy Winehouse, Matchbox 20, others) plus their recordings. Each was run through
+the full app pipeline (demucs → ADTOF on the mix → gate → crash 0.55) and scored
+against its human chart at ±25ms, with alignment taken from the renderer's
+estimator (best of its bar/beat candidates — i.e. what a human picks in Sync).
+Red is the control: it reproduces **66%** here against its independently-pinned
+70.3%, the ~4pt gap being best-discrete-candidate vs the exact pin.
+
+| song | F1 | kick | snare | hihat |
+| --- | --- | --- | --- | --- |
+| DIsForDangerous | 78.3% | 86 | 63 | 82 |
+| Hypnotize | 73.1% | 41 | 80 | 87 |
+| BackToBlack | 54.4% | 68 | 0 | 57 |
+| GoodbyeEarl | 48.0% | 53 | 75 | 40 |
+| howfarwevecome | 44.8% | 45 | 59 | 45 |
+| BurningDownTheHouse | 44.6% | 59 | 51 | 46 |
+| RoadToNowhere | 38.2% | 33 | 49 | 21 |
+| IWannaBeYourLover | 30.8% | 22 | 31 | 34 |
+| HolidayInCambodia | 23.2% | 14 | 8 | 37 |
+| Footloose | 9.0% | 10 | 8 | 11 |
+| **mean** | **44.4%** | 43 | 42 | 46 | (median 44.8%)
+
+**The headline: the real-world mean is ~44%, not the ~70% one song suggested.**
+Red was an easy case, and reporting it alone overstated the pipeline by ~25
+points — exactly the generalisation trap this directory keeps warning about,
+caught only by getting more ground truth. The number is a slight *under*estimate
+(discrete-candidate alignment costs ~4pts, per the control), so true best-aligned
+quality is closer to ~48%; it does not reach 70%.
+
+The variance is the real story: **9% to 78%.** The pipeline is genuinely usable
+on some songs (DIsForDangerous, Hypnotize) and near-useless on others (Footloose,
+Holiday in Cambodia) — and note counts are sane even on the failures (Footloose:
+1265 ref vs 1415 transcribed), so it is mis-transcription, not an empty result.
+This reinforces "listen before trusting a chart" far more than a single number
+would. crash F1 is ~0 on most songs, the expected single-cymbal-class limit.
+
+**Do NOT re-tune thresholds on these ten.** That is the same overfitting, one
+level up. The value here is the honest aggregate and the per-song spread, not a
+new knob setting.
+
+### Two measurement gotchas, so this is cheap to redo
+
+Building this measurement surfaced two traps — both cost real time and would bite
+anyone re-running it:
+
+1. **The reference JSON must carry `bpm`.** `analyzeAlignment` needs the beat
+   length to enumerate bar/beat candidates; without it you get a single seed
+   candidate and the true alignment is usually not in the set. `dump-notes.mjs`
+   includes bpm; a hand-built ref may not. (This is what made the first control
+   read 57% instead of 66% — a broken control, not a broken pipeline.)
+2. **demucs stems are NOT sample-aligned to the mix** (~23ms offset measured),
+   unlike Fadr's. The transcription is in mix time, so alignment for scoring must
+   be computed against the **mix**, not the demucs stem. Aligning on the demucs
+   stem injects that offset into every match and deflates F1.
+
+Also note: `transcribe_eval.py --auto-align` uses this directory's OWN aligner,
+which predates the renderer's phase-lock fix and is materially worse. Its F1 is
+dominated by alignment luck (the raw batch scored the same songs 7–78% with wild
+swings). For a trustworthy number, align with the renderer estimator and score
+note-vs-note. A proper multi-song harness that does this end-to-end is worth
+building now that ground-truth pairs exist — see PROGRESS.
+
 ## The superseded plan: stop classifying, separate instead
 
 > **Superseded 2026-07-18** by the ADTOF result above — kept because its

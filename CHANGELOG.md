@@ -5,6 +5,47 @@ Most recent first.
 
 ---
 
+### 2026-07-19: ten ground-truth songs — the real accuracy is ~44%, not 70%
+
+The user supplied ten songs with genuine human drum MIDIs (Talking Heads,
+Prince, Biggie, Dead Kennedys, Kenny Loggins, Dixie Chicks, Amy Winehouse,
+Matchbox 20, others). n went from 1 to 11, and the answer moved a long way.
+
+**Mean transcription F1 across the ten is ~44% (median 45%, range 9–78%)**,
+against Red's 70%. Red was an easy case; the single-song number overstated the
+pipeline by ~25 points. This is the generalisation trap the eval directory keeps
+warning about, and only more ground truth could have caught it. Full table in
+`scripts/eval/README.md`. The variance matters more than the mean: usable on
+some songs (DIsForDangerous 78%, Hypnotize 73%), near-useless on others
+(Footloose 9%, Holiday in Cambodia 23%), with sane note counts even on the
+failures — so it is mis-transcription, not empty output. "Listen before trusting
+a chart" is now quantified.
+
+**Getting a trustworthy number was four wrong attempts, each caught by a
+control** (Red must reproduce ~70%). Recording the confounds because they are
+easy to fall back into:
+
+- The raw batch used `transcribe_eval.py --auto-align`, whose aligner predates
+  the renderer's phase-lock fix — its F1 measured alignment luck (same songs
+  swung 7–78%), not transcription.
+- A quick Python re-aligner had too coarse a search grid for long songs and
+  failed the control at 21%.
+- A TS re-measure aligned against the **mix**, but my control ref lacked `bpm`,
+  so `analyzeAlignment` produced one wrong candidate instead of ~17 — control 57%.
+- Aligning against the **demucs stem** was worse: demucs stems carry a ~23ms
+  offset vs the mix (Fadr's don't), and the transcription is in mix time.
+
+The method that finally reproduced the control (Red 66% vs pinned 70%, the gap
+being best-discrete-candidate vs exact pin): align the human chart to the MIX
+with the renderer's estimator, take the best-fitting bar/beat candidate, score
+note-vs-note with the harness's Hungarian matcher. Both gotchas are written into
+the eval README so a re-run is cheap.
+
+**No thresholds were changed.** Re-tuning on these ten would be the same
+overfitting one level up; the deliverable is the honest aggregate. A proper
+reusable multi-song accuracy harness is now worth building (PROGRESS) — the
+measurement was done in throwaway scratch this time.
+
 ### 2026-07-19: pipeline regression net + robustness on bad inputs
 
 The transcription pipeline had zero automated coverage — a dependency bump or a

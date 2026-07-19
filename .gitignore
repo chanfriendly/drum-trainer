@@ -8,3 +8,4 @@ logs/
 .vite/
 *.tsbuildinfo
 .venv-adt/
+.scratch/

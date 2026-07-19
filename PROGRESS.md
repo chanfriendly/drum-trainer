@@ -259,20 +259,20 @@ Prioritised. The top item is the real project now.
    FLAC as audio, attach the drum stem in Sync, play. Remaining question is
    unchanged: are the hi-hats "sparse but fair" or "broken"? Do not judge on
    Hounds of Love — still 67% toms, a known-bad case.
-3. **Refine transcription accuracy — BLOCKED on ground truth, not code.** Every
-   accuracy number (F1, the crash sweep) is measured against Taylor Swift's Red,
-   the ONLY human-charted song available. Tuning any further threshold on it
-   overfits to one song. The unblock is DATA: any song with a real human drum
-   `.mid` (not a transcription) becomes a test case. To measure one, locally
-   (never commit the audio):
-   ```
-   node scripts/eval/dump-notes.mjs "real.mid" /tmp/ref.json
-   python3 scripts/eval/transcribe_eval.py --audio "song.mp3" \
-       --reference /tmp/ref.json --auto-align
-   ```
-   With three or four such pairs, "crash=0.55 is a good default" becomes a
-   measured claim. The user is hunting for pairs. Until then, the plumbing is
-   protected by `npm run test:transcribe` but the accuracy knobs stay as-is.
+3. **Build a reusable multi-song accuracy harness.** Accuracy is no longer
+   unmeasured — 2026-07-19 measured **~44% mean F1 across ten human-charted
+   songs** (range 9–78%; Red's 70% was optimistic — see CHANGELOG and
+   `scripts/eval/README.md`). But that measurement was done in throwaway
+   scratch, and it took four attempts because of two confounds now documented
+   in the eval README: the reference JSON must carry `bpm`, and alignment for
+   scoring must use the MIX (demucs stems carry a ~23ms offset). The durable
+   task is a committed harness that, given a folder of `{mp3, human.mid}` pairs,
+   runs the pipeline and reports per-song + mean F1 using the RENDERER aligner
+   (not `transcribe_eval --auto-align`, which is the old pre-fix aligner and
+   gives alignment-luck-dominated numbers). The method that reproduced the Red
+   control: renderer `analyzeAlignment` on the mix → best bar/beat candidate →
+   Hungarian F1 note-vs-note. Do NOT re-tune thresholds on the current ten —
+   that overfits one level up.
 4. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a
@@ -290,11 +290,12 @@ Prioritised. The top item is the real project now.
 
 ## What's blocked
 
-- **Playable songs.** Largely unblocked as of 2026-07-18: any song Fadr can
-  produce a drum stem for can now be charted by
-  `scripts/transcribe/adtof_transcribe.py` (measured 66.4% F1). What remains
-  unproven is whether such a chart *feels* playable on the kit — that is now
-  the top "What's next" item.
+- **Playable songs.** Unblocked mechanically (the app generates a chart from
+  audio in ~1 min), but chart QUALITY is song-dependent and often mediocre:
+  measured **~44% mean F1 across ten human-charted songs, range 9–78%**
+  (2026-07-19). Some songs come out well, others near-useless, and there is no
+  reliable way to know which without listening. So the library grows easily but
+  not every generated chart is worth keeping. Hand-made charts remain better.
 - **Judgment "feel"** needs the kit and the user's ears; no test can establish
   it. Largely unblocked now that the kit works, and the Sync preview's clicks
   are now confirmed audible (2026-07-19).
