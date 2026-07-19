@@ -361,8 +361,22 @@ function GameplayCanvas({ song }: { song: SongWithChart }) {
     currentTime: number,
     now: number,
   ) => {
-    const W = canvas.width;
-    const H = canvas.height;
+    /**
+     * Draw in CSS pixels, not device pixels.
+     *
+     * The backing store is sized `clientWidth * dpr` so lanes stay sharp on a
+     * Retina display, but without scaling the context every FIXED size below is
+     * in device pixels — on a 2x display an "11px" label renders at 5.5 CSS px,
+     * notes are 5px tall instead of 10, and the hit line is a hairline. Sizes
+     * derived from W/H (lane width, hit-line height) scaled correctly all along,
+     * which is why this hid: only the hand-tuned constants were half-size, so it
+     * read as "the labels are too small" rather than as a scaling bug.
+     */
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
     const laneW = W / DRUM_TYPES.length;
     const hitY = H * HIT_LINE_FRAC;
 
@@ -423,12 +437,37 @@ function GameplayCanvas({ song }: { song: SongWithChart }) {
       ctx.shadowBlur = 0;
     }
 
+    /**
+     * Lane labels, in the gap below the hit line.
+     *
+     * They sat at the very bottom edge in 11px, which during play is both too
+     * small and in the wrong place: your eyes live at the hit line, not the
+     * bottom of the screen, so identifying a lane meant a deliberate glance
+     * away from the notes. Sitting them just under the hit line, on a chip in
+     * the lane's own colour, means the drum name is beside where you are
+     * already looking and the colour reinforces it.
+     */
+    const labelY = hitY + Math.min(34, (H - hitY) / 2);
+    const labelSize = Math.max(12, Math.min(17, laneW / 7));
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     DRUM_TYPES.forEach((dt, i) => {
-      ctx.fillStyle = DRUM_COLORS[dt] + "cc";
-      ctx.font = "bold 11px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText(DRUM_LABELS[dt], i * laneW + laneW / 2, H - 10);
+      const cx = i * laneW + laneW / 2;
+      const label = DRUM_LABELS[dt];
+      ctx.font = `600 ${labelSize}px system-ui`;
+
+      const chipW = Math.min(laneW - 10, ctx.measureText(label).width + 22);
+      const chipH = labelSize + 12;
+      ctx.fillStyle = DRUM_COLORS[dt] + "22";
+      ctx.beginPath();
+      ctx.roundRect(cx - chipW / 2, labelY - chipH / 2, chipW, chipH, chipH / 2);
+      ctx.fill();
+
+      ctx.fillStyle = DRUM_COLORS[dt];
+      ctx.fillText(label, cx, labelY);
     });
+    // Restore the default the judgment floats below are written against.
+    ctx.textBaseline = "alphabetic";
 
     floatsRef.current.forEach((f) => {
       const elapsed = (now - f.born) / 600;
