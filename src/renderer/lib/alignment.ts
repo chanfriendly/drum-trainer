@@ -442,6 +442,53 @@ export interface AlignmentAnalysis {
 const CONFIDENT_MARGIN = 0.04;
 
 /**
+ * Resolution of the seed's phase search, ms. Finer than the ±25ms Perfect
+ * window by enough that phase error stops being the limiting factor, and
+ * coarse enough that a full-beat sweep stays ~200 evaluations.
+ */
+const PHASE_STEP_MS = 5;
+
+/**
+ * Best offset within ±radius of `centre`, taking the CENTRE of the winning
+ * plateau rather than its first sample.
+ *
+ * The plateau is the point. `scoreSymmetric` matches within a ±30ms tolerance,
+ * so on clean audio the score SATURATES: every offset across a ~60ms band
+ * scores identically, and a plain argmax returns whichever edge it scanned
+ * first. Measured on synthetic click tracks, that produced a dead-constant
+ * ~30ms error — independent of note count and of the true offset, i.e. half the
+ * matching tolerance, exactly as an edge-of-plateau bias predicts.
+ *
+ * A tight error around a non-zero mean is a systematic bug, not noise (the same
+ * reading that caught FRAME_LEAD twice). Real songs hide it because their
+ * scores never saturate; a well-separated stem or a rendered chart is precisely
+ * where it would bite, and those are the easy cases that should be exact.
+ */
+function bestOffsetNear(
+  centre: number,
+  radiusMs: number,
+  stepMs: number,
+  f1At: (offsetMs: number) => number,
+): number {
+  let bestF1 = -Infinity;
+  const scores: { offsetMs: number; f1: number }[] = [];
+  for (let d = -radiusMs; d <= radiusMs; d += stepMs) {
+    const offsetMs = centre + d;
+    const f1 = f1At(offsetMs);
+    scores.push({ offsetMs, f1 });
+    if (f1 > bestF1) bestF1 = f1;
+  }
+
+  // Widest contiguous run at the best score, then its midpoint. Ties elsewhere
+  // in the sweep (a repetitive groove aliasing a bar away) must not drag the
+  // answer between them, so only the run containing the FIRST best sample counts.
+  const start = scores.findIndex((s) => s.f1 >= bestF1);
+  let end = start;
+  while (end + 1 < scores.length && scores[end + 1].f1 >= bestF1) end++;
+  return (scores[start].offsetMs + scores[end].offsetMs) / 2;
+}
+
+/**
  * Rank the plausible alignments instead of guessing one.
  *
  * `estimateAlignment` finds a good fit but cannot know which BAR it landed on.
@@ -484,23 +531,46 @@ export function analyzeAlignment(
 
   const candidates: AlignmentCandidate[] = [];
   const beatSec = bpm ? 60 / bpm : null;
+
   // Beat granularity, spanning ±maxBars worth of beats. A groove aliases at the
   // beat, so bar-only candidates can miss the truth entirely.
   const maxBeats = maxBars * beatsPerBar;
+
+  /**
+   * ANCHOR THE CANDIDATES ON A FINE SWEEP, not on the raw seed.
+   *
+   * Every candidate below is a whole-BEAT shift of an anchor, so the anchor's
+   * sub-beat phase is inherited by all of them. If that phase is wrong the
+   * truth is not in the candidate set AT ALL, and no amount of enumerating more
+   * bars puts it there — the per-candidate ±40ms retune cannot cross the gap.
+   *
+   * Measured on a known-truth pair (an ADTOF chart against the audio it was
+   * transcribed from, so truth is exactly offset 0): the seed landed 1844ms
+   * out, which is 3.9 beats — not a whole number. The truth scored f1 0.705
+   * against the winning candidate's 0.664, so the METRIC was right and would
+   * have picked it; the nearest offered candidate was 206ms away, enough to
+   * auto-Miss the whole song.
+   *
+   * A LOCAL search around the seed is not enough, and failing that way is
+   * instructive: anchored to the seed it found a higher-scoring phase inside
+   * its window and moved there, which broke a pair that previously worked
+   * (Hounds of Love, correct at 3ms, went to 1648ms). The best phase is not
+   * necessarily near the seed. So sweep the whole span the candidates cover and
+   * take the global best; the beat enumeration then supplies the alternatives,
+   * which is the part only a human can settle.
+   */
+  const anchorOffsetMs = beatSec
+    ? bestOffsetNear(seed.offsetMs, maxBeats * beatSec * 1000, PHASE_STEP_MS, (o) => scoreAt(o).f1)
+    : seed.offsetMs;
   const shifts = beatSec ? Array.from({ length: maxBeats * 2 + 1 }, (_, i) => i - maxBeats) : [0];
 
   for (const beats of shifts) {
-    let offsetMs = seed.offsetMs + beats * (beatSec ?? 0) * 1000;
-
     // Re-tune each candidate locally: the bar-shifted position may sit slightly
     // better a few ms either way, and judging candidates at a stale offset would
     // rank them on a handicap rather than on merit.
-    let best = { offsetMs, score: scoreAt(offsetMs) };
-    for (let d = -40; d <= 40; d += 5) {
-      const score = scoreAt(offsetMs + d);
-      if (score.f1 > best.score.f1) best = { offsetMs: offsetMs + d, score };
-    }
-    offsetMs = best.offsetMs;
+    const seeded = anchorOffsetMs + beats * (beatSec ?? 0) * 1000;
+    const offsetMs = bestOffsetNear(seeded, 40, 5, (o) => scoreAt(o).f1);
+    const best = { score: scoreAt(offsetMs) };
 
     candidates.push({
       offsetMs,
