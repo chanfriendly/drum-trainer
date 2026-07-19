@@ -72,8 +72,22 @@ def main():
             shutil.copy(args.audio, audio)
         print(f"input path contains glob characters; staged to {staging}")
 
+    # One file at a time, even for a folder. predictFolder's own directory
+    # handling passes the DIRECTORY to the decoder and dies with
+    # "IsADirectoryError", so a folder argument fails after the model has
+    # already loaded — the slowest possible way to find out.
+    if os.path.isdir(audio):
+        targets = sorted(
+            os.path.join(audio, n) for n in os.listdir(audio) if not n.startswith(".")
+        )
+    else:
+        targets = [audio]
+
     try:
-        model.predictFolder(audio, args.outdir, writeMidi=True, **hparams)
+        for i, target in enumerate(targets, 1):
+            if len(targets) > 1:
+                print(f"[{i}/{len(targets)}] {os.path.basename(target)}")
+            model.predictFolder(target, args.outdir, writeMidi=True, **hparams)
     finally:
         if staging:
             shutil.rmtree(staging, ignore_errors=True)

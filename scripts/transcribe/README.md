@@ -44,19 +44,48 @@ re-importing classification as thresholding (separated stems bleed, and the
 "99.3% onset timing" number was measured on clean audio); it remains the
 fallback if hi-hat recall needs rescuing, not the default.
 
+## Feed it the FULL MIX, not the drum stem
+
+This reverses the original guidance here, on measurement. ADTOF was trained on
+full mixes, and separation *removes* quiet hi-hats before the model ever sees
+them. Measured on Red against its real human chart, both at the same
+established alignment:
+
+| | drum stem | **full mix** |
+| --- | --- | --- |
+| Overall F1 @±25ms | 66.4% | **70.3%** |
+| hi-hat F1 | 47.4% (recall 34%) | **61.5%** (recall **52%**) |
+| kick F1 | 88.5% | 89.5% |
+| snare F1 | 78.8% | 80.4% |
+| crash precision | 45.2% | **23.2%** ← worse |
+| inside ±25ms | 94.3% | 96.1% |
+
+The gain is almost entirely **hi-hat recall**, which was the pipeline's main
+weakness — 101 more real hats found. The cost is cymbal precision: in a mix,
+guitar and vocal high-frequency energy reads as crashes (95 predicted, 29
+exist). That trade is worth taking, because missing hats make a chart feel
+empty while a few extra crashes are merely wrong notes in one lane.
+
+**Still align against the drum stem.** Transcription and alignment want
+different inputs, and both are measured: the stem locks 3.04 vs the mix's 0.65
+because nothing but drums produces onsets there. So: transcribe the mix, attach
+the stem in Sync.
+
 ## Known limits — read before trusting a chart
 
-- **Hi-hats are under-charted.** Recall ~34% on the real stem (precision ~77%):
-  roughly two of three charted hats are missing, but the hats it writes are
-  real. For practice this degrades gracefully — missing notes beat hallucinated
-  ones.
 - **One cymbal class.** Everything cymbal-ish becomes note 49 (crash). No
   crash/ride distinction, no open/closed hat.
-- **Toms over-trigger** (precision ~21% on the real stem).
+- **Toms over-trigger** (precision ~23%).
 - **~10ms early bias**, tight spread. Constant, so the app's per-song Sync
   alignment absorbs it — do not add a correction here on top.
-- **Feed it isolated drum stems**, not full mixes. All measurements are on
-  stems; that is the supported input.
+- **Some songs collapse entirely, and full-mix input does not rescue them.**
+  Kate Bush's *Hounds of Love* transcribes as **67% toms with zero hi-hats and
+  zero cymbals** from the mix (62% from the stem) — a 1985 Fairlight/gated
+  production far outside ADTOF's rock-game training domain. Listen before
+  trusting a chart; a collapsed one is obvious within a few bars.
+- **Only one checkpoint ships.** The package registers ~60 model names but
+  contains weights for exactly one (`Frame_RNN_adtofAll_0`). "Try a different
+  model" is not a local option — it needs weights from the ADTOF repo.
 
 ## Gotchas encoded in the script
 

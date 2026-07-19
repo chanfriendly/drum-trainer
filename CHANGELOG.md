@@ -5,6 +5,47 @@ Most recent first.
 
 ---
 
+### 2026-07-19 (night): transcribe the mix, align the stem
+
+**The intuition was backwards, and one harness run showed it.** The reasoning
+had been "separation artifacts confuse the model, so give it the cleanest
+input". In fact ADTOF was trained on full mixes, and separation *removes* quiet
+hi-hats before the model ever sees them. Red against its real human chart, both
+sides pinned to the same established alignment so alignment is not a confound:
+
+| | drum stem | full mix |
+| --- | --- | --- |
+| Overall F1 @±25ms | 66.4% | **70.3%** |
+| hi-hat F1 / recall | 47.4% / 34.3% | **61.5% / 51.7%** |
+| crash precision | 45.2% | 23.2% |
+| inside ±25ms | 94.3% | 96.1% |
+
+101 more real hi-hats — the pipeline's single biggest weakness, and the thing
+the user actually noticed missing. The cost is cymbal precision (95 crashes
+predicted where 29 exist) because guitar and vocals put energy in the same
+band. Worth taking: a chart missing a third of its hats feels empty, extra
+crashes are wrong notes in one lane.
+
+**Transcription and alignment want OPPOSITE inputs, and both are measured.**
+Stem alignment locks 3.04 vs the mix's 0.65; mix transcription beats stem
+transcription. So the workflow is: transcribe the mix, attach the stem in Sync.
+`scripts/transcribe/README.md` said the opposite and has been corrected.
+
+**Two paths closed cheaply.** Full-mix input does NOT rescue *Hounds of Love*
+(67% toms / zero hats / zero cymbals from the mix, 62% from the stem), so that
+collapse is a training-domain problem, not a separation artifact. And the pip
+package registers ~60 model names while shipping weights for exactly one
+(`Frame_RNN_adtofAll_0`) — "try another checkpoint" is not a local option.
+
+**Caveat recorded, not buried: n=1.** Red is the only pair with a human
+ground-truth chart, so the quantitative claim rests on one song. The other two
+were transcribed both ways and their class distributions barely moved.
+
+**Fixed:** `adtof_transcribe.py` accepted a folder in its `--help` but
+`predictFolder` hands the directory to the decoder and dies with
+`IsADirectoryError` — after the model has loaded, which is the slowest possible
+way to find out. It now iterates files itself.
+
 ### 2026-07-19 (evening): the estimator's real bug, and a canvas that never scaled
 
 **The alignment estimator's problem was candidate GENERATION, not the metric.**

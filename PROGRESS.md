@@ -24,9 +24,9 @@ it.** See `scripts/eval/README.md` for the measurements and
 
 ```
 song audio  →  drum stem (Fadr/Demucs, external)   verified sample-aligned to the mix
-            →  .mid       (scripts/transcribe/adtof_transcribe.py)
-            →  import     (audio + that .mid)
-            →  Sync       (attach the stem as analysis audio, Auto-align)
+            →  .mid       (scripts/transcribe/adtof_transcribe.py — feed it the MIX)
+            →  import     (full-mix audio + that .mid)
+            →  Sync       (attach the STEM as analysis audio, Auto-align)
             →  play
 ```
 
@@ -179,6 +179,16 @@ practice-groove kit is pleasant to drum against.
       sends that note. Settings now lists unmapped notes found in the library
       with GM names and counts, and assigns them to a lane in one click.
       Verified in the built app against the real library (89 tests).
+- [x] 2026-07-19 — **Transcribe the MIX, align the STEM.** The "give the model
+      the cleanest input" intuition was backwards: ADTOF trained on full mixes,
+      and separation strips quiet hi-hats before it sees them. On Red vs its
+      human chart at a pinned alignment: **F1 66.4% → 70.3%, hi-hat recall
+      34% → 52%** (cost: crash precision 45% → 23%). Alignment still wants the
+      stem (lock 3.04 vs 0.65) — opposite inputs, both measured. Regenerated
+      charts in `~/Downloads/adtof-charts/` as `(drums, from mix)`. Closed two
+      paths cheaply: only ONE checkpoint ships despite ~60 registered names,
+      and full-mix input does not rescue Hounds of Love (still 67% toms).
+      n=1 for the quantitative claim — Red is the only human-charted pair.
 - [x] 2026-07-19 — **Alignment estimator fixed — the workflow's broken link.**
       The known-truth oracle diagnosed it in one run: the truth scored HIGHER
       than the winner (f1 0.705 vs 0.664) but was never in the candidate list,
@@ -204,17 +214,17 @@ practice-groove kit is pleasant to drum against.
 
 Prioritised. The top item is the real project now.
 
-1. **Improve ADTOF transcription quality — the plumbing is no longer the
-   bottleneck.** The end-to-end workflow now works (see "The workflow" below);
-   what varies is the chart. Hounds of Love came out 62% toms with zero
-   hi-hats and zero cymbals — a 1985 Fairlight/gated production far outside
-   ADTOF's rock-game training domain — while drop dead's distribution is
-   plausible and played well. Options, cheapest first: try ADTOF's other
-   pretrained checkpoints; feed it the FULL MIX rather than a stem (it was
-   trained on full mixes, and the stem's separation artifacts may be what
-   confuses it — a one-line experiment worth running before anything harder);
-   then the superseded separation plan in `scripts/eval/README.md`, which must
-   now beat 66.4%.
+1. **Play the full-mix charts on the kit and judge the hi-hats.** Transcribing
+   the MIX instead of the stem lifted hi-hat recall 34% → 52% (overall F1 66.4%
+   → 70.3%) — the exact weakness that was in question. Regenerated charts are
+   in `~/Downloads/adtof-charts/` marked `(drums, from mix)`. Import
+   **drop dead (from mix)** with the full-mix FLAC as audio, attach the drum
+   stem in Sync, and play. The open question is unchanged and now answerable:
+   do the hats read as "sparse but fair" or "broken"? Two cheap paths are
+   already closed — other checkpoints (only one ships) and full-mix input for
+   *Hounds of Love* (still 67% toms; that collapse is a training-domain
+   problem). If hats still feel wrong, the remaining lever is the superseded
+   separation plan in `scripts/eval/README.md`, which must now beat 70.3%.
 2. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a

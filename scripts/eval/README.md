@@ -182,6 +182,38 @@ because the oracle's rendered kit is out-of-domain for it — practice-groove is
 an optimistic bound for hand-tuned DSP but a mildly *pessimistic* one for
 models trained on records. Both songs must still be reported together.
 
+### Feed the model the FULL MIX (2026-07-19)
+
+The obvious follow-up — "separation artifacts must be what confuses it, so give
+it the cleanest possible input" — is **backwards**, and the harness said so in
+one run. ADTOF was trained on full mixes, and separation *removes* quiet
+hi-hats before the model sees them. Red, against its real human chart, both
+sides at the same established alignment (−1501ms / 0.984), so alignment is not
+a confound:
+
+| | drum stem | full mix |
+| --- | --- | --- |
+| Overall F1 @±25ms | 66.4% | **70.3%** |
+| hi-hat F1 / recall | 47.4% / 34.3% | **61.5% / 51.7%** |
+| crash precision | 45.2% | 23.2% |
+| inside ±25ms | 94.3% | 96.1% |
+
+Recall rises 61.3% → 71.4% while precision slips 72.4% → 69.3%: it finds 101
+more real hi-hats and invents more crashes (95 predicted, 29 exist), because
+guitar and vocals put energy where cymbals live. Worth taking — a chart missing
+a third of its hats feels empty, whereas extra crashes are wrong notes in one
+lane.
+
+**This does NOT change where alignment should look.** Transcription and
+alignment want opposite inputs and both are measured: the stem locks 3.04 vs
+0.65 on the mix. Transcribe the mix, align the stem.
+
+**Caveat: n=1 for the quantitative claim.** Red is the only pair here with a
+human ground-truth chart. Two other songs were transcribed both ways and their
+class distributions barely moved — and one of them (*Hounds of Love*) stays
+collapsed at 67% toms / zero hats / zero cymbals from the mix, so full-mix
+input is an improvement, not a rescue.
+
 **Consequence: the separation pipeline is demoted from plan to fallback.** It
 would now have to beat 66.4%, not 8.7%, to justify PyTorch + model downloads —
 and per-stem onset detection carries a risk the original plan understated:
