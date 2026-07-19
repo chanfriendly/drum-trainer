@@ -10,8 +10,8 @@ part is the one thing no amount of local testing could establish, and it is now
 done: the user played a song through with their e-kit and it worked.
 
 - Repo: **https://github.com/chanfriendly/drum-trainer** (public, MIT).
-  **Local commits are AHEAD of the remote** — nothing since 2026-07-18 has been
-  pushed. Ask before pushing.
+  Pushed and up to date as of 2026-07-19 (32 commits). No third-party audio or
+  MIDI in the repo or its history — re-verified before this push.
 - All five spec'd screens exist, plus **Sync**, which the spec did not anticipate
   but the problem demanded. No placeholders.
 - 93 tests. Type-clean. Packages to an installable `.dmg` with an icon.
