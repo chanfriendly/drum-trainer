@@ -17,9 +17,29 @@ done: the user played a song through with their e-kit and it worked.
   window. The plumbing is precise enough to judge drumming.
 
 **The active workstream is no longer the app — it is getting playable songs into
-it.** A song needs a real drum MIDI, and free drum MIDI/sheet music is scarce
-enough that it is the practical limit on what can be played. See
-`scripts/eval/README.md` for the measurements and the plan.
+it.** See `scripts/eval/README.md` for the measurements and
+`scripts/transcribe/README.md` for the pipeline.
+
+### The workflow, end to end (as of 2026-07-19: functioning)
+
+```
+song audio  →  drum stem (Fadr/Demucs, external)   verified sample-aligned to the mix
+            →  .mid       (scripts/transcribe/adtof_transcribe.py)
+            →  import     (audio + that .mid)
+            →  Sync       (attach the stem as analysis audio, Auto-align)
+            →  play
+```
+
+Every step has been exercised on real songs. Two songs were carried through it
+end to end and played on the kit. What still varies is **chart quality**, not
+the plumbing: ADTOF nails some songs and collapses on others (see "What's next"
+#1). Alignment, which was the broken link, now lands within 8ms of established
+truth on all three known-truth pairs.
+
+**The one manual step is running the Python script**, deliberately — it needs
+TensorFlow and model weights, so it stays an offline tool. The app's "MIDI
+only, never infer from audio" rule is intact: the script emits a `.mid` that
+imports like any other.
 
 ### Read this before touching timing or imports
 
@@ -159,6 +179,19 @@ practice-groove kit is pleasant to drum against.
       sends that note. Settings now lists unmapped notes found in the library
       with GM names and counts, and assigns them to a lane in one click.
       Verified in the built app against the real library (89 tests).
+- [x] 2026-07-19 — **Alignment estimator fixed — the workflow's broken link.**
+      The known-truth oracle diagnosed it in one run: the truth scored HIGHER
+      than the winner (f1 0.705 vs 0.664) but was never in the candidate list,
+      because candidates are whole-beat shifts of an anchor whose sub-beat
+      phase was 3.9 beats out. Anchor on a fine sweep of the whole span (a
+      local search around the seed is NOT enough — it broke a working case).
+      Also fixed an edge-of-plateau bias worth a constant ~30ms. All three
+      known-truth pairs now land within 8ms. 93 tests.
+- [x] 2026-07-19 — **Gameplay canvas was drawing in device pixels** — the
+      backing store was DPR-scaled but the context never was, so every
+      hand-tuned constant was half-size on Retina (11px labels → 5.5 CSS px).
+      Presented as a design complaint, was a scaling bug. Lane labels also
+      moved to coloured chips under the hit line. Verified by screenshot.
 - [x] 2026-07-19 — Verified the **Fadr drum stem is sample-aligned with the
       full mix** (cross-correlation: 0.00ms lag, sharp peak, identical length).
       This was load-bearing: gameplay plays the mix while Sync now analyses the
@@ -171,40 +204,31 @@ practice-groove kit is pleasant to drum against.
 
 Prioritised. The top item is the real project now.
 
-1. **Fix the estimator's offset ranking — there is now a clean oracle for it.**
-   An ADTOF chart played against the stem it was transcribed FROM has
-   known-exact alignment (offset 0, scale 1), on REAL audio. Two such pairs
-   exist and they split:
-   - Hounds of Love → estimator says 0.003s / 80% "clear winner". **Correct.**
-   - drop dead → estimator says 1.844s / 68% "too close to call". **Wrong.**
-
-   Tempo scale is right in both; only offset ranking fails. **First hypothesis:
-   drop dead has 58s of near-silence before the drums enter** (RMS 0.0003 until
-   second 58; first chart note 58.520s), which would skew the standardized
-   envelope's mean/stdev — try normalising over the charted span, or excluding
-   silent regions. Related and still open: on Red the estimator ranked the
-   correct offset near LAST of 17 (see CHANGELOG 2026-07-19). The eval README's
-   banded-DTW note is the bigger fix in the same area.
-2. **Play an ADTOF chart on the kit.** Use **drop dead** — its transcription
-   distribution is plausible (kick 30% / hihat 33% / snare 25%). Do NOT judge
-   the pipeline on Hounds of Love: that chart is 62% toms with zero hi-hats and
-   zero cymbals, i.e. a transcription failure, and the user already heard it as
-   wrong while its alignment was provably perfect. The open question is still
-   whether 34% hi-hat recall reads as "sparse but fair" or "broken".
-3. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
+1. **Improve ADTOF transcription quality — the plumbing is no longer the
+   bottleneck.** The end-to-end workflow now works (see "The workflow" below);
+   what varies is the chart. Hounds of Love came out 62% toms with zero
+   hi-hats and zero cymbals — a 1985 Fairlight/gated production far outside
+   ADTOF's rock-game training domain — while drop dead's distribution is
+   plausible and played well. Options, cheapest first: try ADTOF's other
+   pretrained checkpoints; feed it the FULL MIX rather than a stem (it was
+   trained on full mixes, and the stem's separation artifacts may be what
+   confuses it — a one-line experiment worth running before anything harder);
+   then the superseded separation plan in `scripts/eval/README.md`, which must
+   now beat 66.4%.
+2. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a
    guaranteed miss. ~1% of that song, but it is a general case (any two chart
    notes that map to the same lane at the same time) and gameplay does not
    handle it. Cheap: dedupe by (lane, time) when building the judge list.
-4. **README screenshots.** Deferred deliberately — the library contained junk
+3. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
    recording indicator) and crop the bottom status bar, which shows the user's
    account email.
-5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+4. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
    script on purpose.
-6. **Hardware validation pass** — the checklist under "Notes for next session".
+5. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 

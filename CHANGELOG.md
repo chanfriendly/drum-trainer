@@ -5,6 +5,52 @@ Most recent first.
 
 ---
 
+### 2026-07-19 (evening): the estimator's real bug, and a canvas that never scaled
+
+**The alignment estimator's problem was candidate GENERATION, not the metric.**
+The known-truth oracle (an ADTOF chart against the audio it was transcribed
+from) made this diagnosable in one run: on drop dead the truth scored f1
+**0.705** against the winning candidate's **0.664** — so the metric ranked it
+correctly and would have picked it — but it was never in the list. The nearest
+candidate sat 206ms away.
+
+Cause: candidates are whole-BEAT shifts of an anchor, so the anchor's sub-beat
+phase is inherited by all of them. The seed sat 1844ms out, which is 3.9 beats
+— not a whole number — so no enumeration could ever reach the truth, and the
+per-candidate ±40ms retune could not cross the gap.
+
+**The first fix was wrong in an instructive way.** A local phase search anchored
+to the seed moved to a higher-scoring phase *inside its own window* and broke
+Hounds of Love, which had been correct at 3ms, sending it to 1648ms. The best
+phase is not necessarily near the seed. Sweeping the whole span the candidates
+cover is what works.
+
+**Second bug found while testing the first: an edge-of-plateau bias.**
+`scoreSymmetric` matches within ±30ms, so on clean audio the score SATURATES —
+a whole ~60ms band scores identically and `argmax` returned whichever edge it
+scanned first. On synthetic click tracks that showed as a dead-constant ~30ms
+error, independent of note count and of the true offset. *A tight error around
+a non-zero mean is a systematic bug, not noise* — the third time that reading
+has paid out here. Taking the centre of the winning plateau: 30ms → 6-9ms.
+
+Measured against all three real songs with established truth:
+
+| song | truth | before | after |
+| --- | --- | --- | --- |
+| drop dead | 0ms | 1844ms | **4ms**, confident |
+| Hounds of Love | 0ms | 3ms | **8ms**, confident |
+| Red (vs stem) | −1501ms | ranked 16th of 17 | **−1506ms** |
+
+**The gameplay canvas was drawing in device pixels.** The backing store is sized
+`clientWidth * dpr` for sharpness, but the context was never scaled, so every
+hand-tuned constant was half-size on a Retina display: 11px lane labels rendered
+at 5.5 CSS px, notes at 5px, the hit line as a hairline. Sizes derived from W/H
+(lane width, hit-line position) scaled correctly all along, which is exactly why
+it hid — it presented as "the labels are too small", a design complaint, rather
+than as a scaling bug. Fixed by `ctx.setTransform(dpr, …)` and drawing in CSS
+pixels throughout. Labels also moved from the bottom edge to a coloured chip
+just under the hit line, where the player is already looking.
+
 ### 2026-07-19 (later): 670 invisible notes — unmapped notes were unreachable by design
 
 **The user played Red and reported "a section missing hi-hats". They were right,
