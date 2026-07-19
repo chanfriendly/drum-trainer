@@ -114,7 +114,13 @@ function SyncEditor({
 
   // A bar is the natural nudge unit because the ambiguity IS bar-shaped.
   // Without a tempo we can't size one, so fall back to a beat-ish 500ms and say so.
-  const barSeconds = song.bpm ? (4 * 60) / song.bpm : 0.5;
+  //
+  // × tempoScale is load-bearing, not a rounding detail. song.bpm is the MIDI's
+  // tempo, so a bar is that many CHART seconds — but `offsetMs` shifts the chart
+  // along the AUDIO, where the same bar is shorter by the tempo ratio. Measured
+  // on Red: 4 beat-nudges unscaled land 34ms from the correct offset and no
+  // combination of buttons reaches it; scaled, they land within 3ms.
+  const barSeconds = (song.bpm ? (4 * 60) / song.bpm : 0.5) * tempoScale;
   const lastNote = song.chart.length > 0 ? song.chart[song.chart.length - 1].time : 0;
   const driftMs = lastNote * (1 - tempoScale) * 1000;
 
