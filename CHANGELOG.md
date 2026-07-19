@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+### 2026-07-19 (later): 670 invisible notes — unmapped notes were unreachable by design
+
+**The user played Red and reported "a section missing hi-hats". They were right,
+and it was not the chart's fault.** Red carries **670 Tambourine (54) notes —
+34% of its 1,944** — and 54 is not in `DEFAULT_MIDI_MAPPING`, so every one was
+dropped. In the section they noticed (140–160s) the chart has 114 tambourine
+notes against 18 hi-hats: the tambourine *replaces* the hat pattern rather than
+doubling it (only 4.3% of tambourine hits share a timestamp with a hat). So a
+third of the song was invisible, and the player correctly read that as a hole.
+
+Excluding unmapped notes remains right — scoring them as misses would punish the
+player for the app's ignorance of their kit (critical rule 3). **Doing it
+silently was the bug.**
+
+**The deeper problem: those notes were unreachable.** Learn maps whatever pad
+you HIT. No e-kit sends a tambourine note, so there was no path — through any
+UI — to assign note 54 to a lane. The mapping editor quietly assumed every
+chart note is one your kit can produce. Charts with tambourine, cowbell,
+claps or shakers break that assumption, and the more of a chart sits on such
+notes the more invisible it becomes.
+
+**Fix:** `findUnmappedNotes()` (pure, tested) scans every chart in the library
+against the current mapping, and Settings grows a section listing each unmapped
+note with its GM name, how many notes carry it, and which songs — with six lane
+buttons to assign it. Verified by driving the built app: the section showed
+"54 / Tambourine / 670 notes / Taylor Swift - Red", clicking Hi-Hat persisted
+`54: "hihat"`, and the section then disappeared — the list empties as it is
+acted on, so the warning cannot decay into noise.
+
+**Known consequence, not yet handled:** the 29 timestamps where tambourine and
+hi-hat coincide now put two notes in one lane at the same instant, which can
+only be hit once. ~1% of the song, so not urgent, but "two chart notes mapping
+to the same lane at the same time" is a general case gameplay does not collapse.
+
 ### 2026-07-19: Red's true offset settled; a free oracle for the estimator; the ear test has a limit
 
 **Red's correct offset is −1501ms, and it is now established without any audio

@@ -1,7 +1,7 @@
 # Progress
 
 > Read this before doing anything else. Update it before you stop.
-> Last updated: 2026-07-18
+> Last updated: 2026-07-19
 
 ## Current status
 
@@ -153,6 +153,12 @@ practice-groove kit is pleasant to drum against.
       matching against ADTOF's transcription (96.4% vs 87.4% at the previously
       saved value), and **drop dead's as 0** (confirmed by a third
       implementation at +0.007s / lock 2.94). Both stored as `manual`.
+- [x] 2026-07-19 — **Unmapped notes are now visible and mappable.** Red was
+      missing 670 Tambourine (54) notes — 34% of the chart, replacing the hat
+      pattern in choruses — and Learn could never reach them because no e-kit
+      sends that note. Settings now lists unmapped notes found in the library
+      with GM names and counts, and assigns them to a lane in one click.
+      Verified in the built app against the real library (89 tests).
 - [x] 2026-07-19 — Verified the **Fadr drum stem is sample-aligned with the
       full mix** (cross-correlation: 0.00ms lag, sharp peak, identical length).
       This was load-bearing: gameplay plays the mix while Sync now analyses the
@@ -185,14 +191,20 @@ Prioritised. The top item is the real project now.
    zero cymbals, i.e. a transcription failure, and the user already heard it as
    wrong while its alignment was provably perfect. The open question is still
    whether 34% hi-hat recall reads as "sparse but fair" or "broken".
-3. **README screenshots.** Deferred deliberately — the library contained junk
+3. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
+   tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
+   and a lane can only be struck once at an instant — so one of each pair is a
+   guaranteed miss. ~1% of that song, but it is a general case (any two chart
+   notes that map to the same lane at the same time) and gameplay does not
+   handle it. Cheap: dedupe by (lane, time) when building the judge list.
+4. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
    recording indicator) and crop the bottom status bar, which shows the user's
    account email.
-4. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
    script on purpose.
-5. **Hardware validation pass** — the checklist under "Notes for next session".
+6. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 

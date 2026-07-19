@@ -19,7 +19,13 @@ import { ActivityIcon, ArrowLeftIcon, RotateCcwIcon } from "lucide-react";
 
 import type { AppSettings, DrumType, MidiNoteEvent } from "../../shared/types.js";
 import { Button, useToast } from "../components/ui.js";
-import { DEFAULT_MIDI_MAPPING, DRUM_COLORS, DRUM_LABELS, DRUM_TYPES } from "../lib/drums.js";
+import {
+  DEFAULT_MIDI_MAPPING,
+  DRUM_COLORS,
+  DRUM_LABELS,
+  DRUM_TYPES,
+  findUnmappedNotes,
+} from "../lib/drums.js";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../lib/settings.js";
 
 export function SettingsView() {
@@ -35,6 +41,22 @@ export function SettingsView() {
     queryKey: ["midi:listDevices"],
     queryFn: () => window.drumTrainer.midi.listDevices(),
   });
+
+  // Every chart in the library, so unmapped notes can be found. Charts are the
+  // expensive part of a song, but this is a settings screen opened by hand —
+  // the alternative is the player never learning those notes exist.
+  const chartsQuery = useQuery({
+    queryKey: ["songs:allCharts"],
+    queryFn: async () => {
+      const songs = await window.drumTrainer.songs.list();
+      return Promise.all(songs.map((s) => window.drumTrainer.songs.get(s.id)));
+    },
+  });
+
+  const unmapped = useMemo(
+    () => (chartsQuery.data ? findUnmappedNotes(chartsQuery.data, settings.midiMapping) : []),
+    [chartsQuery.data, settings.midiMapping],
+  );
 
   const persist = useCallback((next: AppSettings) => {
     setSettings(next);
@@ -242,6 +264,53 @@ export function SettingsView() {
               Reset to GM defaults
             </Button>
           </Section>
+
+          {/* ── Unmapped notes ─────────────────────────────────────
+              Learn can only map a pad you can HIT. A chart can carry notes no
+              e-kit sends (tambourine, cowbell, claps), and those are silently
+              dropped — which reads as a broken section, not a mapping gap.
+              This is the only way to reach them. */}
+          {unmapped.length > 0 && (
+            <Section
+              title="Notes in your songs with no lane"
+              description="These appear in your charts but aren't mapped, so they're invisible during play and never counted as misses. Learn can't reach them — your kit can't send them. Pick a lane to play them on."
+            >
+              <div className="space-y-2">
+                {unmapped.map((note) => (
+                  <div key={note.midiNote} className="rounded-lg bg-surface px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-mono text-sm font-medium">{note.midiNote}</span>
+                      <span className="text-sm">{note.name ?? "Unknown percussion"}</span>
+                      <span className="text-xs text-drum-crash">
+                        {note.count.toLocaleString()} note{note.count === 1 ? "" : "s"}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
+                        {note.songs.join(", ")}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {DRUM_TYPES.map((drum) => (
+                        <Button
+                          key={drum}
+                          onClick={() => {
+                            persist({
+                              ...settings,
+                              midiMapping: { ...settings.midiMapping, [note.midiNote]: drum },
+                            });
+                            toast.success(
+                              `Note ${note.midiNote} → ${DRUM_LABELS[drum]} (${note.count} notes now playable)`,
+                            );
+                          }}
+                        >
+                          <span style={{ color: DRUM_COLORS[drum] }}>{DRUM_LABELS[drum]}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {/* ── Hit windows ────────────────────────────────────── */}
           <Section
