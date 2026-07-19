@@ -16,6 +16,7 @@
     "midi-sim": "node scripts/midi-sim.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:transcribe": ".venv-adt/bin/python scripts/transcribe/test_pipeline.py",
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.yml"
   },
   "dependencies": {

@@ -5,6 +5,38 @@ Most recent first.
 
 ---
 
+### 2026-07-19: pipeline regression net + robustness on bad inputs
+
+The transcription pipeline had zero automated coverage — a dependency bump or a
+script edit could break it and only surface a hardware session later.
+`scripts/transcribe/test_pipeline.py` (`npm run test:transcribe`) is the
+tripwire: it runs the whole pipeline on the committed oracle and on degenerate
+inputs, asserting **plumbing, not accuracy** (accuracy lives in `scripts/eval/`
+and is bottlenecked on ground truth). 18 checks. Not in `npm run test` — it
+needs the venv and takes ~30s.
+
+The robustness pass found two honest-error problems, both fixed in
+`chart_from_audio.py`:
+
+- **Corrupt/empty audio** raised a `madmom` decode error deep in the model, and
+  the pipeline forwarded the raw traceback — which the app's error toast shows
+  the user verbatim. Now: "Could not read X as audio. It may be corrupt, empty,
+  or an unsupported format."
+- **Too-short or silent audio** produced no notes, reported as "transcription
+  produced no .mid" — reads as a bug when the truth is "nothing to chart." Now:
+  "No drums were detected in X. It may be too short, nearly silent, or contain
+  no drum part."
+
+Verified the app path: the transcription service takes the script's last stderr
+line, and for both cases that line is now the clean sentence. Mono audio works
+(261 notes); missing file already errored cleanly. The demucs separation step
+runs `--no-separate` in the test for speed and determinism, so it's exercised by
+hand rather than here — the wrapper around it already degrades to ungated on
+failure.
+
+**Confirmed while here:** judging never reads velocity, so ADTOF's flat
+velocity-100 output needs no correction.
+
 ### 2026-07-19: kit icons in the lanes
 
 Each lane now carries a line-art icon of its drum, up the lane where the eye

@@ -24,6 +24,29 @@ Both flags fix a measured failure and both are worth passing by default:
 drums in intros), and `--threshold crash=0.55` roughly halves cymbal false
 positives. Details in **Known limits** below.
 
+`chart_from_audio.py` wraps all of this — separation, transcription, gating,
+crash threshold — into one call and is what the app shells out to. Use it
+rather than driving `adtof_transcribe.py` directly unless you're experimenting.
+
+## Testing the pipeline
+
+```bash
+npm run test:transcribe        # or: .venv-adt/bin/python scripts/transcribe/test_pipeline.py
+```
+
+Runs the whole pipeline on the committed oracle song and on a set of degenerate
+inputs (missing / corrupt / empty / silent / mono). It asserts **plumbing**,
+not accuracy: that a good song yields an importable channel-10 chart whose notes
+are all in the model's vocabulary, and that every bad input fails with a
+one-line human message instead of a crash or a misleading one. It needs the
+venv and takes ~30s, so it is deliberately NOT part of `npm run test` (which is
+pure and instant). Run it after any dependency bump or edit to these scripts —
+the pipeline has no other regression net. (It runs `--no-separate` for speed and
+determinism, so the demucs step itself is exercised by hand, not here.)
+
+Transcription *accuracy* is a different question, measured in `scripts/eval/`
+against a human-charted song, and is bottlenecked on having such songs.
+
 Model weights ship inside the pip package (~10MB checkpoint) — no separate
 download, no GPU needed. A 3½-minute song transcribes in well under a minute on
 the MacBook's CPU; the Jetson is not required for this.

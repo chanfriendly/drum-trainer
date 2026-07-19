@@ -122,12 +122,27 @@ def main():
             cmd += ["--gate-with", stem]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
+            # The model raises a decode error deep in madmom as a Python
+            # traceback. Surfacing that verbatim would put a stack trace in the
+            # app's error toast; translate the one failure a user can actually
+            # cause — an unreadable file — into a sentence, and keep the raw
+            # tail only for genuinely unexpected failures.
+            if "LoadAudioFileError" in proc.stderr or "load_audio_file" in proc.stderr:
+                sys.exit(
+                    f"Could not read {os.path.basename(args.audio)} as audio. "
+                    "It may be corrupt, empty, or an unsupported format."
+                )
             sys.exit(f"transcription failed:\n{proc.stderr[-1500:]}")
 
         base = os.path.basename(args.audio)
         midi = os.path.join(args.outdir, base + ".mid")
         if not os.path.isfile(midi):
-            sys.exit(f"transcription produced no .mid for {base}")
+            # The model ran and found nothing — an empty result, not a failure of
+            # the tool. Say which, because "no .mid produced" reads as a bug.
+            sys.exit(
+                f"No drums were detected in {base}. It may be too short, nearly "
+                "silent, or contain no drum part."
+            )
 
         # Keep the stem next to the chart: the app attaches it as Sync's
         # analysis audio, where it locks 4.7x better than the full mix.

@@ -21,6 +21,7 @@ npm run dev              # electron-vite dev — hot reload for renderer, restar
 npm run type-check       # tsc --noEmit across main, preload, renderer
 npm run test             # vitest (pure functions only — see Principles)
 npm run test:fixtures    # decode test audio to PCM (needs ffmpeg; test-only)
+npm run test:transcribe  # end-to-end pipeline tripwire (needs .venv-adt; ~30s)
 npm run build            # type-check + compile main/preload/renderer to out/
 npm run dist:mac         # build + package an unsigned .dmg into release/
 ```
@@ -48,7 +49,7 @@ Every session, in this order:
 
 1. **Read `PROGRESS.md` first.** It is the current-state document. Everything
    else in this file is stable background; PROGRESS.md is what changed.
-2. **Run `npm run type-check` and `npm run test`.** 74 tests cover the pure
+2. **Run `npm run type-check` and `npm run test`.** 93 tests cover the pure
    logic — alignment, judging, calibration, chart shape — which is genuinely
    most of the maths. What they cannot cover is feel (see Principles: the oracle
    is hardware). Both must be clean before you start and before you stop.

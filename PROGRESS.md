@@ -191,6 +191,12 @@ practice-groove kit is pleasant to drum against.
 - [x] 2026-07-19 — **Lane kit icons** (`lib/drum-icons.ts`), drawn as canvas
       vector art rather than PNGs so they take the lane colour and stay sharp at
       any width. Verified with notes falling through them.
+- [x] 2026-07-19 — **Pipeline tripwire + robustness** (`test_pipeline.py`,
+      `npm run test:transcribe`, 18 checks). Fixed two honest-error bugs found
+      in the pass: corrupt/empty audio surfaced a raw traceback (now a
+      sentence), and short/silent audio said "no .mid produced" (now "no drums
+      detected"). Both verified to reach the app toast as clean text. Asserts
+      plumbing, not accuracy — accuracy stays blocked on ground truth.
 - [x] 2026-07-19 — **Chart generation is in the app** ("Audio only…"). Pipeline
       script + `transcription-service.ts` (spawns the external venv, streams
       progress), `chartSource` provenance with a **Generated** badge, stem
@@ -253,20 +259,34 @@ Prioritised. The top item is the real project now.
    FLAC as audio, attach the drum stem in Sync, play. Remaining question is
    unchanged: are the hi-hats "sparse but fair" or "broken"? Do not judge on
    Hounds of Love — still 67% toms, a known-bad case.
-3. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
+3. **Refine transcription accuracy — BLOCKED on ground truth, not code.** Every
+   accuracy number (F1, the crash sweep) is measured against Taylor Swift's Red,
+   the ONLY human-charted song available. Tuning any further threshold on it
+   overfits to one song. The unblock is DATA: any song with a real human drum
+   `.mid` (not a transcription) becomes a test case. To measure one, locally
+   (never commit the audio):
+   ```
+   node scripts/eval/dump-notes.mjs "real.mid" /tmp/ref.json
+   python3 scripts/eval/transcribe_eval.py --audio "song.mp3" \
+       --reference /tmp/ref.json --auto-align
+   ```
+   With three or four such pairs, "crash=0.55 is a good default" becomes a
+   measured claim. The user is hunting for pairs. Until then, the plumbing is
+   protected by `npm run test:transcribe` but the accuracy knobs stay as-is.
+4. **Collapse simultaneous same-lane notes in gameplay.** Mapping Red's
    tambourine to hi-hat creates 29 timestamps carrying two notes in one lane,
    and a lane can only be struck once at an instant — so one of each pair is a
    guaranteed miss. ~1% of that song, but it is a general case (any two chart
    notes that map to the same lane at the same time) and gameplay does not
    handle it. Cheap: dedupe by (lane, time) when building the judge list.
-4. **README screenshots.** Deferred deliberately — the library contained junk
+5. **README screenshots.** Deferred deliberately — the library contained junk
    chord-file songs that would have been baked into the images. It is clean now,
    so this is unblocked. Capture with `screencapture -x` (silent, full-res, no
    recording indicator) and crop the bottom status bar, which shows the user's
    account email.
-5. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
+6. **Set up ESLint.** Deliberately absent rather than broken; there is no `lint`
    script on purpose.
-6. **Hardware validation pass** — the checklist under "Notes for next session".
+7. **Hardware validation pass** — the checklist under "Notes for next session".
 
 ## What's blocked
 
@@ -357,7 +377,7 @@ hard-won reasoning are `CHANGELOG.md` (why things are the way they are) and
 
 ```bash
 npm run dev            # run it
-npm run test           # 74 tests
+npm run test           # 93 tests
 npm run midi-sim burst # play the part of an e-kit over the IAC bus
 npm run dist:mac       # installable .dmg
 ```
